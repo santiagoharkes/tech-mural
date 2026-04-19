@@ -18,6 +18,10 @@ export interface NoteCardProps {
    * animates out smoothly.
    */
   isHighlighted?: boolean
+  /** Card is the current click-focus target: lifts above the rest, stronger shadow. */
+  isFocused?: boolean
+  /** Another card owns the focus: fade + disable pointer to make the focused one the star. */
+  isDimmed?: boolean
 }
 
 /**
@@ -25,29 +29,44 @@ export interface NoteCardProps {
  * owns the data. Positioned absolutely via `style` so that a render pass of
  * one card does not trigger the spatial container to reflow.
  */
-function NoteCardImpl({ note, authorName, now, isHighlighted }: NoteCardProps) {
+function NoteCardImpl({
+  note,
+  authorName,
+  now,
+  isHighlighted,
+  isFocused,
+  isDimmed,
+}: NoteCardProps) {
   const { id, text, x, y, color, createdAt } = note
   const palette = NOTE_COLOR_PALETTE[color]
   const labelId = `note-${id}-text`
+  const descId = `note-${id}-desc`
   const recent = isRecentNote(note, now)
+  const relativeTime = formatRelativeTime(createdAt, now)
 
   return (
     <article
       aria-labelledby={labelId}
+      aria-describedby={descId}
       data-testid="note-card"
+      data-note-id={id}
       data-color={color}
       data-recent={recent ? 'true' : undefined}
       data-highlighted={isHighlighted ? 'true' : undefined}
+      data-focused={isFocused ? 'true' : undefined}
+      data-dimmed={isDimmed ? 'true' : undefined}
       data-no-pan
-      tabIndex={0}
       className={cn(
         'absolute w-44 rounded-md border p-3 shadow-sm',
-        'motion-safe:transition-[transform,box-shadow] motion-safe:duration-300',
-        'focus-visible:ring-ring/60 focus-visible:ring-2 focus-visible:outline-none',
-        'hover:shadow-md motion-safe:hover:-translate-y-0.5',
+        'motion-safe:transition-[transform,box-shadow,opacity] motion-safe:duration-300',
+        !isFocused &&
+          !isDimmed &&
+          'focus-within:z-20 hover:z-20 hover:shadow-md motion-safe:hover:-translate-y-0.5',
         noteColorClasses(color),
         recent && 'ring-ring/40 ring-2 ring-offset-1',
-        isHighlighted && 'ring-primary shadow-lg ring-4 ring-offset-2',
+        isHighlighted && 'ring-primary z-10 shadow-lg ring-4 ring-offset-2',
+        isFocused && 'z-30 scale-110 shadow-2xl',
+        isDimmed && 'pointer-events-none opacity-15',
       )}
       style={{ left: `${x}px`, top: `${y}px` }}
     >
@@ -67,9 +86,12 @@ function NoteCardImpl({ note, authorName, now, isHighlighted }: NoteCardProps) {
       >
         <span data-testid="note-author">{authorName}</span>
         <time dateTime={createdAt} title={new Date(createdAt).toLocaleString()}>
-          {formatRelativeTime(createdAt, now)}
+          {relativeTime}
         </time>
       </footer>
+      <span id={descId} className="sr-only">
+        {recent ? 'Posted in the last 24 hours. ' : ''}By {authorName}, {relativeTime}.
+      </span>
     </article>
   )
 }

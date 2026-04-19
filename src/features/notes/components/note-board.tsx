@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useElementSize } from '@/lib/use-element-size'
@@ -94,7 +103,11 @@ function SpatialBoard({
   const { focus } = useBoardFocus()
   const [containerRef, size] = useElementSize<HTMLElement>()
   const [highlightId, setHighlightId] = useState<NoteId | null>(null)
+  const [focusedId, setFocusedId] = useState<NoteId | null>(null)
   const centeredFor = useRef<NoteId | null>(null)
+  // Pointer position at mousedown; used to distinguish a click (dismiss focus)
+  // from a pan drag that happens to release on the background.
+  const pointerDownAt = useRef<{ x: number; y: number } | null>(null)
 
   /**
    * When the URL carries a focus id (set by the list view's reveal button),
@@ -124,6 +137,15 @@ function SpatialBoard({
     return () => clearTimeout(timer)
   }, [highlightId])
 
+  // Treat focus as cleared whenever the focused note is not in the current
+  // (filtered) set. Derived in render so a filter that hides the card hides
+  // the focus styles too, and a filter that brings it back restores them —
+  // no effect, no cascading renders.
+  const activeFocusedId = useMemo(
+    () => (focusedId && notes.some((n) => n.id === focusedId) ? focusedId : null),
+    [focusedId, notes],
+  )
+
   // Viewport culling. We fall back to rendering everything until the
   // container has been measured (initial render, jsdom, no-ResizeObserver
   // environments) — a one-time 200-card paint is cheaper than a wrong cull.
@@ -140,6 +162,11 @@ function SpatialBoard({
    */
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
+      if (event.key === 'Escape' && activeFocusedId) {
+        setFocusedId(null)
+        event.preventDefault()
+        return
+      }
       switch (event.key) {
         case 'ArrowLeft':
           panBy(KEYBOARD_PAN_STEP, 0)
@@ -172,7 +199,45 @@ function SpatialBoard({
       }
       event.preventDefault()
     },
-    [panBy, reset, zoomBy, resetZoom],
+    [panBy, reset, zoomBy, resetZoom, activeFocusedId],
+  )
+
+  /**
+   * Click-to-focus: delegate through the canvas. A click on a note toggles
+   * focus; a click elsewhere (background) dismisses it, but only if it was a
+   * real click — we measure pointer travel between down and up, because the
+   * pan drag also ends with a click event on this element.
+   */
+  const CLICK_DRAG_THRESHOLD = 5
+
+  const handlePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      pointerDownAt.current = { x: event.clientX, y: event.clientY }
+      bind.onPointerDown(event)
+    },
+    [bind],
+  )
+
+  const handleClick = useCallback(
+    (event: ReactMouseEvent<HTMLElement>) => {
+      const target = event.target as HTMLElement
+      const card = target.closest<HTMLElement>('[data-note-id]')
+      if (card) {
+        const id = card.dataset.noteId as NoteId | undefined
+        if (!id) return
+        setFocusedId((prev) => (prev === id ? null : id))
+        return
+      }
+      if (!activeFocusedId) return
+      const origin = pointerDownAt.current
+      if (!origin) return
+      const dx = Math.abs(event.clientX - origin.x)
+      const dy = Math.abs(event.clientY - origin.y)
+      if (dx <= CLICK_DRAG_THRESHOLD && dy <= CLICK_DRAG_THRESHOLD) {
+        setFocusedId(null)
+      }
+    },
+    [activeFocusedId],
   )
 
   /**
@@ -205,7 +270,8 @@ function SpatialBoard({
     <section
       ref={containerRef}
       role="region"
-      aria-label={`Board canvas, ${notes.length} notes. Arrow keys pan, Home recenters, + and - zoom, 0 resets zoom.`}
+      aria-label={`Board canvas, ${notes.length} notes`}
+      aria-describedby="note-board-shortcuts"
       aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home + - 0"
       tabIndex={0}
       data-testid="note-board"
@@ -213,12 +279,13 @@ function SpatialBoard({
       data-visible-notes={visibleNotes.length}
       data-scale={scale.toFixed(2)}
       className={cn(
-        'bg-muted/30 relative h-full w-full touch-none overflow-hidden select-none',
+        'group/board bg-muted/30 relative h-full w-full touch-none overflow-hidden select-none',
         'focus-visible:ring-ring/60 focus-visible:ring-2 focus-visible:outline-none',
         isPanning ? 'cursor-grabbing' : 'cursor-grab',
       )}
       onKeyDown={handleKeyDown}
-      {...bind}
+      onPointerDown={handlePointerDown}
+      onClick={handleClick}
     >
       <div
         data-testid="note-board-canvas"
@@ -233,9 +300,27 @@ function SpatialBoard({
             note={note}
             authorName={authorMap.get(note.author) ?? note.author}
             isHighlighted={note.id === highlightId}
+            isFocused={note.id === activeFocusedId}
+            isDimmed={activeFocusedId !== null && note.id !== activeFocusedId}
           />
         ))}
       </div>
+      {/* Visible hint for keyboard users — only shows while the region has
+          focus-visible, so it does not clutter the canvas for pointer users.
+          Also acts as the aria-describedby target for screen-reader users. */}
+      <p
+        id="note-board-shortcuts"
+        data-testid="note-board-shortcuts"
+        className={cn(
+          'pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2',
+          'bg-background/90 text-muted-foreground rounded-full border px-3 py-1 text-xs shadow-sm',
+          'opacity-0 motion-safe:transition-opacity',
+          'group-focus-visible/board:opacity-100',
+        )}
+      >
+        Arrow keys pan · Home recenters · <kbd className="font-sans">+</kbd>{' '}
+        <kbd className="font-sans">-</kbd> zoom · <kbd className="font-sans">0</kbd> resets
+      </p>
     </section>
   )
 }

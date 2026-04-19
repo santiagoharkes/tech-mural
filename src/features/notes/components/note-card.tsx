@@ -11,6 +11,13 @@ export interface NoteCardProps {
   authorName: string
   /** "Now" reference for relative timestamps + recency window. Injectable for deterministic tests. */
   now?: Date
+  /**
+   * When true, renders a temporary highlight ring around the card. Used by
+   * the "reveal on board" flow — the list view asks for focus, SpatialBoard
+   * flashes this for ~2.5 s. The ring fades via CSS, so toggling this off
+   * animates out smoothly.
+   */
+  isHighlighted?: boolean
 }
 
 /**
@@ -18,7 +25,7 @@ export interface NoteCardProps {
  * owns the data. Positioned absolutely via `style` so that a render pass of
  * one card does not trigger the spatial container to reflow.
  */
-function NoteCardImpl({ note, authorName, now }: NoteCardProps) {
+function NoteCardImpl({ note, authorName, now, isHighlighted }: NoteCardProps) {
   const { id, text, x, y, color, createdAt } = note
   const palette = NOTE_COLOR_PALETTE[color]
   const labelId = `note-${id}-text`
@@ -30,14 +37,17 @@ function NoteCardImpl({ note, authorName, now }: NoteCardProps) {
       data-testid="note-card"
       data-color={color}
       data-recent={recent ? 'true' : undefined}
+      data-highlighted={isHighlighted ? 'true' : undefined}
       data-no-pan
       tabIndex={0}
       className={cn(
-        'absolute w-44 rounded-md border p-3 shadow-sm motion-safe:transition-transform',
+        'absolute w-44 rounded-md border p-3 shadow-sm',
+        'motion-safe:transition-[transform,box-shadow] motion-safe:duration-300',
         'focus-visible:ring-ring/60 focus-visible:ring-2 focus-visible:outline-none',
         'hover:shadow-md motion-safe:hover:-translate-y-0.5',
         noteColorClasses(color),
         recent && 'ring-ring/40 ring-2 ring-offset-1',
+        isHighlighted && 'ring-primary shadow-lg ring-4 ring-offset-2',
       )}
       style={{ left: `${x}px`, top: `${y}px` }}
     >

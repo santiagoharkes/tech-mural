@@ -1,7 +1,9 @@
 import { memo } from 'react'
+import { Locate } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { formatRelativeTime } from '@/lib/relative-time'
-import type { Note } from '@/features/notes/types'
+import type { Note, NoteId } from '@/features/notes/types'
 import { NOTE_COLOR_PALETTE, noteColorClasses } from '@/features/notes/lib/note-colors'
 import { isRecentNote } from '@/features/notes/lib/recency'
 
@@ -9,6 +11,12 @@ export interface NoteListItemProps {
   note: Note
   authorName: string
   now?: Date
+  /**
+   * Invoked when the user asks to reveal this note on the spatial board.
+   * The list view wires this to a handler that sets the focus URL param and
+   * flips the view mode to `board`.
+   */
+  onReveal?: (id: NoteId) => void
 }
 
 /**
@@ -18,7 +26,7 @@ export interface NoteListItemProps {
  * layout prop) keeps each component single-purpose and keeps CSS concerns
  * close to the component that actually lays them out.
  */
-function NoteListItemImpl({ note, authorName, now }: NoteListItemProps) {
+function NoteListItemImpl({ note, authorName, now, onReveal }: NoteListItemProps) {
   const { id, text, color, createdAt } = note
   const palette = NOTE_COLOR_PALETTE[color]
   const labelId = `list-note-${id}-text`
@@ -32,7 +40,7 @@ function NoteListItemImpl({ note, authorName, now }: NoteListItemProps) {
       data-recent={recent ? 'true' : undefined}
       tabIndex={0}
       className={cn(
-        'relative rounded-md border p-3 shadow-sm motion-safe:transition-transform',
+        'group relative rounded-md border p-3 shadow-sm motion-safe:transition-transform',
         'focus-visible:ring-ring/60 focus-visible:ring-2 focus-visible:outline-none',
         'hover:shadow-md motion-safe:hover:-translate-y-0.5',
         noteColorClasses(color),
@@ -46,7 +54,7 @@ function NoteListItemImpl({ note, authorName, now }: NoteListItemProps) {
           New
         </span>
       ) : null}
-      <p id={labelId} className="text-sm leading-snug font-medium">
+      <p id={labelId} className="pr-6 text-sm leading-snug font-medium">
         {text}
       </p>
       <footer
@@ -57,6 +65,26 @@ function NoteListItemImpl({ note, authorName, now }: NoteListItemProps) {
           {formatRelativeTime(createdAt, now)}
         </time>
       </footer>
+      {onReveal ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="reveal-on-board"
+          aria-label={`Show "${text}" on the board`}
+          onClick={(event) => {
+            event.stopPropagation()
+            onReveal(id)
+          }}
+          className={cn(
+            'absolute top-1 right-1 size-7 opacity-60 motion-safe:transition-opacity',
+            'group-hover:opacity-100 hover:opacity-100 focus-visible:opacity-100',
+            palette.accent,
+          )}
+        >
+          <Locate className="size-3.5" aria-hidden />
+        </Button>
+      ) : null}
     </article>
   )
 }

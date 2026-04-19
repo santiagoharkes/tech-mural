@@ -15,6 +15,8 @@ export interface UseBoardPanReturn {
   reset: () => void
   /** Increment the current offset by a delta. Used by arrow-key pan. */
   panBy: (dx: number, dy: number) => void
+  /** Replace the offset outright. Used to centre the canvas on a specific note. */
+  setOffset: (offset: Offset) => void
 }
 
 const NO_PAN_SELECTOR = '[data-no-pan]'
@@ -93,11 +95,16 @@ export function useBoardPan(initial: Offset = { x: 0, y: 0 }): UseBoardPanReturn
     setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
   }, [])
 
+  const setOffsetTo = useCallback((next: Offset) => {
+    setOffset(next)
+  }, [])
+
   return {
     offset,
     isPanning,
     bind: { onPointerDown },
     reset,
     panBy,
+    setOffset: setOffsetTo,
   }
 }

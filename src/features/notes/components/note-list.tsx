@@ -1,4 +1,4 @@
-import type { Note } from '@/features/notes/types'
+import type { Note, NoteId } from '@/features/notes/types'
 import { NoteListItem } from './note-list-item'
 
 export interface NoteListProps {
@@ -6,6 +6,8 @@ export interface NoteListProps {
   authorMap: ReadonlyMap<string, string>
   /** Shared "now" reference so every item agrees on what "recent" means. */
   now?: Date
+  /** Optional hook for the "show on board" action rendered inside each item. */
+  onReveal?: (id: NoteId) => void
 }
 
 /**
@@ -13,7 +15,7 @@ export interface NoteListProps {
  * feels natural on every viewport. `role="list"` is preserved via the native
  * `<ul>` element.
  */
-export function NoteList({ notes, authorMap, now }: NoteListProps) {
+export function NoteList({ notes, authorMap, now, onReveal }: NoteListProps) {
   return (
     <div className="h-full overflow-y-auto p-6" data-testid="note-list">
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-4">
@@ -23,6 +25,7 @@ export function NoteList({ notes, authorMap, now }: NoteListProps) {
               note={note}
               authorName={authorMap.get(note.author) ?? note.author}
               now={now}
+              onReveal={onReveal}
             />
           </li>
         ))}

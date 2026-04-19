@@ -428,6 +428,43 @@ Today `note-colors.ts` uses Tailwind scales (`bg-yellow-100`) directly; flip on 
 
 ---
 
+## Stage 9 — list → board reveal
+
+### What it solves
+
+Stage 4 documented a real gap: with filters active, matching notes are scattered across a 4000×3000 canvas and most land off-screen. Stage 5 closed one half (a list view so results are legible in a grid). Stage 9 closes the other half: **from the list, one click takes you back to the spatial view with the target note centred and highlighted**.
+
+### Shape
+
+- **URL-backed focus state** (`?focus=note_0042`) via a new `useBoardFocus` nuqs hook. Deep-linkable, shareable, reload-safe — same contract as filters and sort.
+- **Pure geometry** in `center-on-note.ts`: given a note and a viewport, returns the pan offset that puts the note's centre at the viewport's centre. No React in the computation; the test is a two-assertion unit.
+- **`useBoardPan.setOffset`** added alongside the existing `panBy` / `reset` — imperative replacement of the offset is what centring needs, and exposing it alongside the other hooks keeps the API cohesive.
+- **Highlight ring** on the focused card, driven by a 2.5 s timer in `SpatialBoard`. `NoteCard` renders a `ring-primary ring-4` while `isHighlighted`; the removal animates via `motion-safe:transition-[transform,box-shadow]`.
+- **Reveal button** on each `NoteListItem` — `<Button>` from shadcn with `size="icon"`, the lucide `Locate` glyph, and a contextual `aria-label` (`Show "<text>" on the board`). Visible by default at 60 % opacity, 100 % on hover / focus-visible.
+
+### Why the effect is safe
+
+`react-hooks/set-state-in-effect` flagged the centring effect because it calls `setHighlightId` from inside a `useEffect`. Neither `highlightId` nor `offset` appear in the effect's dependency array, so there is no cascade — the effect fires once per distinct `focus` value. The disable comment on that line explains the reason rather than just silencing the rule.
+
+### Why a button and not a clickable card
+
+A whole-card click would steal the default "focus to read" affordance — screen-reader users who `Tab → Enter` to pause on a note would be teleported away instead. An explicit icon button keeps intention clear, preserves the card's own semantics, and gives a disjoint tab stop for keyboard users.
+
+### Tests
+
+- `centerOnNote` — two cases (origin and mid-canvas), pure geometry asserted by solving for the centre equality.
+- `useBoardFocus` — default, hydration, `setFocus`, `clear`, all through `NuqsTestingAdapter`.
+- `useBoardPan` kept its existing cases (pointer, bail-out, keyboard deltas, reset).
+- `tests/e2e/reveal.spec.ts` — two scenarios: the list-click flow (URL updates, view flips, highlight ring renders) and deep-linking (`/?focus=note_0042` lands centred with the ring on).
+
+### What we did not do
+
+- **Clear `focus` on first user pan.** Tempting but wrong. If a user reloads on a focused link they expect to land centred again — URL is intent, not scratch space. The highlight fades on its own; the canvas stays where the user left it.
+- **"Back to list" breadcrumb.** The view-mode toggle is one click away and the URL still carries the focus. Adding another affordance would pile up.
+- **Animated pan to the centred position** (smooth interpolation instead of a jump). Would look great, adds complexity that a 4-hour exercise does not earn back.
+
+---
+
 ## Time log
 
 - Stage 1 — scaffold, tooling, design system, docs skeleton: _~45 minutes_
@@ -437,3 +474,5 @@ Today `note-colors.ts` uses Tailwind scales (`bg-yellow-100`) directly; flip on 
 - Stage 5 — recent highlight, sort, view-mode (Zustand persist), list view, tests: _~50 minutes_
 - Stage 6 — viewport culling, memoisation audit, performance notes: _~30 minutes_
 - Stage 7 — audit, keyboard pan, skip link, motion-safe, a11y e2e: _~30 minutes_
+- Stage 8 — write-up + README polish: _~20 minutes_
+- Stage 9 — list → board reveal with deep-linkable `?focus=` + highlight ring: _~40 minutes_

@@ -57,6 +57,7 @@ A Husky pre-commit hook runs `lint-staged` (`eslint --fix` + `prettier --write` 
 - **Sort** — most recent / oldest / author A–Z / position — with stable tie-breakers so results never look random.
 - **"New" badge** on notes under 24 hours old, plus a subtle focus-ring. Window is configurable.
 - **List view toggle** — segmented control (board vs list) persisted in `localStorage` via Zustand. Every filter and sort still applies; filtered notes that were off-screen in the spatial view show up in the grid.
+- **Reveal on board** — every list item has a "Show on board" icon button. Clicking it writes `?focus=<id>` to the URL, flips the view to board, centres the canvas on the target, and flashes a highlight ring for ~2.5 s. Deep-linkable (`/?focus=note_0042` lands already-centred).
 - **URL state** — filters and sort are synced to the query string via `nuqs`, with typed parsers that reject unknown values. Reload-safe, share-safe.
 - **State branches** — loading skeleton, empty board, error with retry, no-matches-for-filters with a clear action. Each is its own sub-component with its own `data-testid`.
 - **Keyboard-only path** — a skip-to-board link, a focusable region, and arrow-key pan mean the canvas works without a mouse.

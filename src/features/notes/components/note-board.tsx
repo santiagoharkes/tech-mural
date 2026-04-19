@@ -1,16 +1,18 @@
-import { useCallback, useMemo, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useElementSize } from '@/lib/use-element-size'
 import { useNotesQuery } from '@/features/notes/api/notes-query'
 import { useBoardPan } from '@/features/notes/hooks/use-board-pan'
 import { useBoardSort } from '@/features/notes/hooks/use-board-sort'
+import { useBoardFocus } from '@/features/notes/hooks/use-board-focus'
 import { useBoardFilters } from '@/features/filters/api/use-board-filters'
-import { useViewMode } from '@/features/view-mode/store'
+import { useSetViewMode, useViewMode } from '@/features/view-mode/store'
 import { applyNoteFilters } from '@/features/filters/lib/filter-notes'
 import { sortNotes } from '@/features/notes/lib/sort-notes'
+import { centerOnNote } from '@/features/notes/lib/center-on-note'
 import { isNoteVisible } from '@/features/notes/lib/viewport-culling'
-import type { Note, NotesResponse } from '@/features/notes/types'
+import type { Note, NoteId, NotesResponse } from '@/features/notes/types'
 import { NoteCard } from './note-card'
 import { NoteList } from './note-list'
 
@@ -26,12 +28,27 @@ export function NoteBoard() {
   const { filters, activeCount, clear } = useBoardFilters()
   const { sortBy } = useBoardSort()
   const viewMode = useViewMode()
+  const setViewMode = useSetViewMode()
+  const { setFocus } = useBoardFocus()
 
   const processed = useMemo<Note[]>(() => {
     if (!query.data) return []
     const filtered = applyNoteFilters(query.data.notes, filters)
     return sortNotes(filtered, sortBy)
   }, [query.data, filters, sortBy])
+
+  /**
+   * "Show on board" handler. Sets the focused-note URL param and swaps the
+   * view mode to `board`. SpatialBoard reads the focus id, recentres, and
+   * flashes a highlight ring.
+   */
+  const onReveal = useCallback(
+    (id: NoteId) => {
+      void setFocus(id)
+      setViewMode('board')
+    },
+    [setFocus, setViewMode],
+  )
 
   if (query.isPending) return <BoardSkeleton />
   if (query.isError) return <BoardError message={query.error.message} onRetry={query.refetch} />
@@ -41,7 +58,7 @@ export function NoteBoard() {
   }
 
   if (viewMode === 'list') {
-    return <NoteList notes={processed} authorMap={query.data.authorMap} />
+    return <NoteList notes={processed} authorMap={query.data.authorMap} onReveal={onReveal} />
   }
 
   return <SpatialBoard notes={processed} authorMap={query.data.authorMap} />
@@ -50,6 +67,9 @@ export function NoteBoard() {
 /** Keyboard pan distance per arrow-key press, in CSS pixels. */
 const KEYBOARD_PAN_STEP = 80
 
+/** How long the reveal highlight ring stays on before fading. */
+const HIGHLIGHT_DURATION_MS = 2500
+
 function SpatialBoard({
   notes,
   authorMap,
@@ -57,8 +77,39 @@ function SpatialBoard({
   notes: readonly Note[]
   authorMap: ReadonlyMap<string, string>
 }) {
-  const { offset, bind, isPanning, panBy, reset } = useBoardPan()
+  const { offset, bind, isPanning, panBy, reset, setOffset } = useBoardPan()
+  const { focus } = useBoardFocus()
   const [containerRef, size] = useElementSize<HTMLElement>()
+  const [highlightId, setHighlightId] = useState<NoteId | null>(null)
+  const centeredFor = useRef<NoteId | null>(null)
+
+  /**
+   * When the URL carries a focus id (set by the list view's reveal button),
+   * centre the pan on that note once and fire the highlight. Keyed on `focus`
+   * so switching notes or arriving from a shared link both trigger it; guarded
+   * by a ref so a viewport resize does not yank the pan back after the user
+   * has started navigating.
+   */
+  useEffect(() => {
+    if (!focus || size.width === 0 || size.height === 0) return
+    if (centeredFor.current === focus) return
+    const note = notes.find((n) => n.id === focus)
+    if (!note) return
+    setOffset(centerOnNote(note, size))
+    centeredFor.current = focus
+    // Intentional: this syncs a transient visual effect to URL + measured size.
+    // Neither `offset` nor `highlightId` are in this effect's deps, so there is
+    // no cascade. The rule is overly cautious for this synchronisation pattern.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHighlightId(focus)
+  }, [focus, notes, size, setOffset])
+
+  /** Let the highlight fade itself. Ring class transitions via CSS. */
+  useEffect(() => {
+    if (!highlightId) return
+    const timer = setTimeout(() => setHighlightId(null), HIGHLIGHT_DURATION_MS)
+    return () => clearTimeout(timer)
+  }, [highlightId])
 
   // Viewport culling. We fall back to rendering everything until the
   // container has been measured (initial render, jsdom, no-ResizeObserver
@@ -128,6 +179,7 @@ function SpatialBoard({
             key={note.id}
             note={note}
             authorName={authorMap.get(note.author) ?? note.author}
+            isHighlighted={note.id === highlightId}
           />
         ))}
       </div>

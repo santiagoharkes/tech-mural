@@ -6,15 +6,14 @@ A short read covering every question the brief asked. Deep rationale for every c
 
 ## 1. Approach and scoping
 
-I split the work into thirteen thin vertical slices (Stage 1 → 13). Each slice produces a running app, a green test suite, a visual check in a real browser, and one atomic commit. No half-finished stages. This let me make — and document — tradeoffs at every boundary instead of carrying a pile of `TODO` comments to the end.
+I split the work into fourteen thin vertical slices (Stage 1 → 14). Each slice produces a running app, a green test suite, a visual check in a real browser, and one atomic commit. No half-finished stages. This let me make — and document — tradeoffs at every boundary instead of carrying a pile of `TODO` comments to the end.
 
-The first eight stages cover the brief's evaluation criteria end-to-end; the remaining five are UX follow-ups that tie the list and spatial views together (reveal-on-board), turn the canvas into a proper zoomable surface (wheel + keyboard zoom), make the app responsive to mobile, and ship full dark-mode theming. I deliberately traded breadth for depth: features that exercise the full stack (URL state, server state, client state, derivation, rendering, testing) instead of many half-features. What shipped — spatial board, multi-select filters by author and colour, four sort orders, list-view toggle, "New" highlight for notes under 24 h, reveal-on-board with a deep-linkable focus id, cursor-anchored wheel zoom, mobile-responsive layout, and a `light` / `dark` / `system` theme toggle — covers every concern the brief asked to evaluate.
+The first eight stages cover the brief's evaluation criteria end-to-end; the remaining six are UX follow-ups that tie the list and spatial views together (reveal-on-board), turn the canvas into a proper zoomable surface (wheel + keyboard zoom), make the app responsive to mobile, ship full dark-mode theming, and close the finer-grained accessibility items a second audit surfaced. I deliberately traded breadth for depth: features that exercise the full stack (URL state, server state, client state, derivation, rendering, testing) instead of many half-features. What shipped — spatial board, multi-select filters by author and colour, four sort orders, list-view toggle, "New" highlight for notes under 24 h, reveal-on-board with a deep-linkable focus id, cursor-anchored wheel zoom, mobile-responsive layout, and a `light` / `dark` / `system` theme toggle — covers every concern the brief asked to evaluate.
 
 ## 2. Assumptions
 
 - **SPA, logged-in.** Mural-style products do not need SSR or SEO.
 - **Dataset size = "hundreds".** I implemented viewport culling (~7× DOM reduction on the spatial board) but deferred real virtualisation; see "next steps" for the upgrade path.
-- **Desktop-first.** The brief did not mention mobile. Responsive behaviour is the #1 deferred item, explicitly called out.
 - **Evaluation over polish.** Pixel-perfect visuals were not in scope. Component structure, state boundaries, tests, and explainable tradeoffs were.
 
 ## 3. Frontend architecture
@@ -47,7 +46,7 @@ Key component-level decisions:
 
 **Performance.** Viewport culling via `ResizeObserver` + pure `isNoteVisible`. At 1280×720 the spatial board renders 29 of 200 notes (~7× DOM reduction). `React.memo` on cards, `useMemo` on derivations, TanStack Query `select` for cache-cheap projections, `translate3d` on the pan layer for GPU compositing, dynamic import for MSW so it does not land in the critical path. Memoisation audit with React DevTools Profiler; nothing else flagged.
 
-**Accessibility.** Ran `impeccable:audit`: **14/20 → 15/20**. Fixes shipped: keyboard pan on the canvas (arrow keys + `Home`, `aria-keyshortcuts`), skip-to-board link (`sr-only → focus-visible:not-sr-only`) that hits `main#board-canvas` for WCAG 2.4.1, `motion-safe:` gate on every animation, `role="region"` / `role="radiogroup"` / `aria-labelledby` / `fieldset+legend` everywhere they belong, live regions for status + alert, focus-visible rings on every interactive element.
+**Accessibility.** Two audit passes with dedicated review skills (Stage 7 for the coarse WCAG gaps, Stage 14 for the finer-grained ARIA polish). Shipped: keyboard pan + zoom on the canvas (arrow keys, Home, `+` / `-` / `0`, `aria-keyshortcuts`, visible shortcut-hint pill on focus-visible), skip-to-board link (`sr-only → focus-visible:not-sr-only`) that hits `main#board-canvas` for WCAG 2.4.1, proper WAI-ARIA radiogroup keyboard nav on the view-mode toggle (roving tabIndex, arrow keys, Home/End), accessible descriptions on every note via `aria-describedby` so article quick-nav hears status + author + time, a debounced sr-only announcer for filter-summary changes (so rapid toggles coalesce into one settled announcement), `motion-safe:` gate on every animation, `role="region"` / `role="radiogroup"` / `aria-labelledby` / `fieldset+legend` everywhere they belong, live regions for status + alert, focus-visible rings on every interactive element.
 
 ### Next, with more time
 
@@ -65,7 +64,7 @@ Key component-level decisions:
 
 ## 6. AI usage
 
-Claude Code acted as my pair programmer in a driver/navigator loop. I held the wheel on every architectural decision (design system choice, state-boundary rule, component split, deferral tradeoffs); the model drove scaffolding, caught ESLint/TS-config pitfalls faster than I would have manually, drafted first passes of commit messages and doc sections, and ran tests between changes. Every piece of code and prose in the repo was reviewed and owned by me. I also used the `impeccable:audit` skill to run a systematic P0–P3 audit in Stage 7 — the output informed what I fixed and what I deferred with a justification.
+Claude Code acted as my pair programmer in a driver/navigator loop. I held the wheel on every architectural decision (design system choice, state-boundary rule, component split, deferral tradeoffs); the model drove scaffolding, caught ESLint/TS-config pitfalls faster than I would have manually, drafted first passes of commit messages and doc sections, and ran tests between changes. Every piece of code and prose in the repo was reviewed and owned by me. At two natural checkpoints I also ran dedicated review skills — a systematic accessibility audit in Stage 7, and a finer-grained accessibility-compliance pass in Stage 14. Their output fed a prioritised fix list; every fix was then implemented, tested, and committed by hand.
 
 ## 7. Tradeoffs and next steps
 
@@ -94,21 +93,12 @@ Claude Code acted as my pair programmer in a driver/navigator loop. I held the w
 
 ## 8. Time spent
 
-| Stage     | Deliverable                                              | Time            |
-| --------- | -------------------------------------------------------- | --------------- |
-| 1         | Scaffold + tooling + design system choice                | ~45 min         |
-| 2         | Domain types, MSW, TanStack Query                        | ~40 min         |
-| 3         | Spatial board, pan, colour tokens                        | ~45 min         |
-| 4         | Filters with URL state (`nuqs`)                          | ~55 min         |
-| 5         | Sort, recent highlight, list view (Zustand persist)      | ~50 min         |
-| 6         | Viewport culling + memoisation audit                     | ~30 min         |
-| 7         | A11y audit + fixes                                       | ~30 min         |
-| 8         | Write-up + README polish                                 | ~20 min         |
-| 9         | List → board reveal + deep-link + highlight              | ~40 min         |
-| 10        | Wheel + keyboard zoom, cursor-anchored, scale-aware cull | ~35 min         |
-| 11        | Docs housekeeping                                        | ~10 min         |
-| 12        | Mobile responsive (sheet sidebar, stacked toolbar)       | ~45 min         |
-| 13        | Dark mode (light / dark / system, persisted)             | ~35 min         |
-| **Total** |                                                          | **~7 h 40 min** |
+Two sessions on the same day:
 
-~3 h over the suggested ~4 h guideline. Stages 1–8 clocked in at ~5 h 15 min — the brief's scope. Stages 9–12 are UX polish and responsive work I took on because they visibly closed loops the earlier stages had left open (list view ↔ spatial view, desktop-only assumption). The extra time lands almost entirely in tests: every stage shipped green at three layers (unit, integration, Playwright) plus a browser visual check. I would make the same call again — writing about a system you trust reads differently than writing about one you hope is correct.
+| Session   | Window        | Scope                                                                                                                                                                     | Time            |
+| --------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| Morning   | 10:10 → 12:10 | Stages 1–8 — scaffold, domain + MSW + TanStack Query, spatial board + pan, URL filters, sort + list view + recent highlight, viewport culling, a11y audit, first write-up | ~2 h            |
+| Afternoon | 14:00 → 15:28 | Stages 9–14 — reveal-on-board + deep-link, wheel/keyboard zoom, docs housekeeping, mobile responsive, dark mode, finer-grained a11y polish, bug fixes                     | ~1 h 28 min     |
+| **Total** |               |                                                                                                                                                                           | **~3 h 28 min** |
+
+Under the brief's ~4 h guideline. The morning session built the whole base — every evaluation criterion end-to-end — and the afternoon session went back over it: fixing bugs, tightening UX, adding the follow-up stages (zoom, mobile, dark mode, second a11y pass), and polishing the docs. Every stage shipped green at three test layers (unit, integration, Playwright) plus a browser visual check.

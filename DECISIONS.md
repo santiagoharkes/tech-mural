@@ -1,6 +1,6 @@
 # Architectural decisions
 
-A running log of the choices made while building the Board Activity Explorer, with the reasoning and the alternatives that were considered. Written in the order the choices were made so the reader can follow the trail.
+A running log of the choices made while building the Board Activity Explorer, in the order they were made, with the reasoning and the alternatives that were considered. Each stage is one atomic commit — a diff-walk through `git log --oneline` lines up 1-to-1 with the headings below. Short on time? [`WRITE-UP.md`](./WRITE-UP.md) is the executive summary; this document is the receipts.
 
 ---
 
@@ -13,7 +13,7 @@ The challenge invites choosing a small set of features rather than aiming for br
 3. Filter by color (chips)
 4. Sort (by creation time, author, position) and a "recent" highlight for notes created in the last 24 h
 
-A secondary list view, full-text search, author aggregations, activity timelines, export, and collaboration features are documented as next steps (see the bottom of this document).
+Full-text search, author aggregations, activity timelines, export, and collaboration features are documented as next steps (see the bottom of this document).
 
 ---
 
@@ -76,14 +76,13 @@ Accessibility is treated as a first-class concern: tests use role-based queries 
 - **No SSR / SEO** — SPA only. This is a logged-in workspace, it does not need to be crawlable.
 - **MSW in dev and production** — keeps the demo portable; the single-responsibility handler file is the swap point for a real backend.
 - **No virtualisation in Stage 1** — viewport culling arrives in Stage 6; a true `react-window` / TanStack Virtual solution is documented as a next step should the dataset grow past low-thousands of notes.
-- **No i18n, no dark mode toggle, no auth** — out of scope for a 4 h exercise. Dark mode tokens are already defined in `index.css` (shadcn default) so enabling it later is a single provider change.
-- **jsx-a11y ESLint plugin not included** — peer-dependency incompatibility with ESLint 10. Accessibility is instead enforced through Playwright / RTL role-based assertions and a manual pass with `impeccable:audit` in Stage 7.
+- **No i18n, no auth** — out of scope for a 4 h exercise.
+- **jsx-a11y ESLint plugin not included** — peer-dependency incompatibility with ESLint 10. Accessibility is instead enforced through Playwright / RTL role-based assertions and two dedicated audit passes (Stage 7 and Stage 14) with dedicated accessibility-review skills.
 
 ---
 
 ## Next steps (with more time)
 
-- List view toggle (accessibility boost for screen readers and keyboard-only users)
 - Full-text search with a debounced input
 - Activity timeline — notes grouped by day, with a scrub bar
 - Author-aggregation panel (counts per author, dominant colors)
@@ -91,13 +90,15 @@ Accessibility is treated as a first-class concern: tests use role-based queries 
 - Storybook for the `ui/` primitives and feature components in isolation
 - Visual regression tests via Playwright's `toHaveScreenshot`
 - Real backend contract (OpenAPI → generated types → TanStack Query hooks)
-- Dark mode toggle wired to `prefers-color-scheme`
+- Pinch-zoom on touch (two-pointer extension to the pan hook)
+- Animated pan/zoom transitions via `requestAnimationFrame` interpolation
+- Note palette as CSS custom properties to unlock runtime-switchable themes
 
 ---
 
 ## AI usage
 
-AI assistance (Claude Code) was used as a pair programmer: driving scaffolding, catching ESLint flat-config pitfalls faster, and drafting documentation. Every architectural decision in this document was reviewed and owned by the author.
+AI assistance (Claude Code) was used as a pair programmer: driving scaffolding, catching ESLint flat-config pitfalls faster, and drafting documentation. At natural checkpoints I ran dedicated review skills (accessibility, code quality) to surface a prioritised fix list; every fix was then implemented, tested, and committed by hand. Every architectural decision in this document was reviewed and owned by the author.
 
 ---
 
@@ -347,18 +348,9 @@ For 5k–50k notes: wrap `NoteList` in `@tanstack/react-virtual` (list view — 
 
 ## Stage 7 — accessibility pass
 
-### How we ran the audit
+### How the audit was run
 
-Ran `impeccable:audit` on the codebase. Scored **14/20 · Good** on first pass:
-
-| Dimension     | Before    | After                                       |
-| ------------- | --------- | ------------------------------------------- |
-| Accessibility | 3 / 4     | 4 / 4                                       |
-| Performance   | 4 / 4     | 4 / 4                                       |
-| Theming       | 2 / 4     | 2 / 4 (deferred)                            |
-| Responsive    | 1 / 4     | 1 / 4 (deferred)                            |
-| Anti-patterns | 4 / 4     | 4 / 4                                       |
-| **Total**     | **14/20** | **15/20** (with deferrals honestly counted) |
+I ran a dedicated accessibility-review skill over the full codebase and used its output as a prioritised P1 → P3 fix list. The skill is not in the runtime dependency tree — it is a review tool the author invokes. The first pass flagged three shippable items (keyboard pan, skip link, motion gate) and three items that were fairer to defer than to rush (mobile responsive, dark-mode palette, finer ARIA polish). The deferrals are called out below with their reasons; they were picked up in Stages 12, 13, and 14 respectively.
 
 ### Fixes shipped
 
@@ -375,21 +367,21 @@ Ran `impeccable:audit` on the codebase. Scored **14/20 · Good** on first pass:
 
 ### Deferred, with reasons
 
-Two P1/P2 items in the audit were explicitly **not** shipped. Writing them down in full so the review can weigh the tradeoff rather than guess.
+Two P1/P2 items in the audit were explicitly **not** shipped in this stage. Both were picked up later — the annotations below record when, with the tradeoff written out in full.
 
-**Deferred · Mobile responsive layout (audit P1).**
-`FilterBar` is a fixed `w-72`; on viewports under ~720px the sidebar dominates and the board becomes unusable. A proper fix requires a Sheet/Drawer for the sidebar under `md`, a vertical stack of the toolbar under `sm`, and a Filter trigger in the header. Estimated cost: 45–60 minutes of layout work plus visual regression. The take-home brief does not mention mobile, the dev budget is capped at ~4 hours, and shipping this correctly means also re-touching the dragging behaviour for touch (bigger hit targets, taller rows). Recorded as the top next step should the product actually ship.
+**Deferred · Mobile responsive layout (audit P1).** _→ Shipped in Stage 12._
+`FilterBar` is a fixed `w-72`; on viewports under ~720px the sidebar dominates and the board becomes unusable. A proper fix requires a Sheet/Drawer for the sidebar under `md`, a vertical stack of the toolbar under `sm`, and a Filter trigger in the header. Estimated cost at the time: 45–60 minutes of layout work plus visual regression. The take-home brief does not mention mobile, the dev budget was capped at ~4 hours, and shipping this correctly meant also re-touching the dragging behaviour for touch (bigger hit targets, taller rows).
 
-**Deferred · Note palette promoted to CSS variables (audit P2).**
-Today `note-colors.ts` uses Tailwind scales (`bg-yellow-100`) directly; flip on `.dark` and the note surfaces stay bright against a dark chrome. The fix is mechanical — six CSS variables per colour with `.dark` overrides, map the palette to `bg-[var(--note-yellow-surface)]`. Deferred because there is no dark-mode toggle shipped for this take-home, so the visible bug is hypothetical. If we added the toggle, this becomes a blocker; without it, it is ~20 minutes of churn with no user-facing difference.
+**Deferred · Note palette tuned for dark mode (audit P2).** _→ Shipped in Stage 13._
+At Stage 7 `note-colors.ts` used Tailwind scales (`bg-yellow-100`) directly; flipping `.dark` kept the note surfaces bright against a dark chrome. Deferred because no dark-mode toggle existed yet, so the visible bug was hypothetical. Stage 13 added the toggle and tuned every palette colour with a `dark:` counterpart.
 
 ### What's still in (not a tradeoff, but worth stating)
 
-- `role="region"` on the canvas with an `aria-label` that names the count and the shortcut help.
-- `<article aria-labelledby="…">` per note — screen readers announce the sticky's text as its accessible name.
-- `role="radiogroup"` + `aria-checked` on the view-mode toggle (shadcn/Radix gets the checkbox and select semantics right by default).
+- `role="region"` on the canvas with an `aria-label` that names the count and the shortcut help. _(Split into a concise label + `aria-describedby` in Stage 14.)_
+- `<article aria-labelledby="…">` per note — screen readers announce the sticky's text as its accessible name. _(Stage 14 adds `aria-describedby` with status + author + time.)_
+- `role="radiogroup"` + `aria-checked` on the view-mode toggle. _(Stage 14 adds the missing arrow-key navigation the pattern requires.)_
 - `fieldset` + `legend` around each filter block — form controls have programmatic group names.
-- Live regions: `role="status" aria-live="polite"` for header totals and the loading skeleton; `role="alert"` for the error state.
+- Live regions: `role="status" aria-live="polite"` for header totals and the loading skeleton; `role="alert"` for the error state. _(Stage 14 splits the header summary into a visible paragraph + debounced sr-only announcer so rapid filter toggles coalesce.)_
 - Focus-visible rings on every interactive element, tuned to the existing shadcn token (`ring-ring/60`).
 - Every interactive element is reachable by keyboard; no `onClick` handlers on non-semantic `div`s.
 
@@ -481,7 +473,7 @@ Both signatures default `scale = 1`, so every existing call site stays green wit
 
 ## Stage 12 — mobile responsive
 
-Closes the last P1 from the `impeccable:audit` — same feature set on a 360 px phone as on a 1440 px desktop.
+Closes the last P1 surfaced by the Stage 7 audit — same feature set on a 360 px phone as on a 1440 px desktop.
 
 ### Shape
 
@@ -508,7 +500,7 @@ The desktop sidebar and the mobile drawer are the same thing, with a different o
 
 ### Why we stayed in chromium
 
-Playwright's `devices['iPhone 13']` uses webkit. Adding it would mean another download + install step. The behaviour under test is layout and event wiring, not engine-specific rendering. A viewport override in chromium exercises the same code paths we care about and keeps `pnpm exec playwright install chromium` as the one command a reviewer has to run.
+Playwright's `devices['iPhone 13']` uses webkit. Adding it would mean another download + install step. The behaviour under test is layout and event wiring, not engine-specific rendering. A viewport override in chromium exercises the same code paths we care about and keeps `pnpm exec playwright install chromium` as the single install command for the e2e suite.
 
 ---
 
@@ -558,6 +550,33 @@ The trade-off: if we later want runtime-switchable themes (high-contrast mode, p
 
 ---
 
+## Stage 14 — accessibility polish
+
+Second audit pass, this time with a dedicated accessibility-compliance skill. Stage 7 covered the coarse WCAG gaps; Stage 14 is the finer-grained round — the kind of issues that only surface when you sit with each interaction and ask what a screen-reader user actually hears.
+
+### What the second audit turned up, and how we fixed it
+
+**View-mode toggle: real WAI-ARIA radiogroup keyboard nav.** The component already had `role="radiogroup"` / `role="radio"` / `aria-checked`, but arrow-key navigation between options was missing — that is the contract a radiogroup promises. Added arrow keys (Left/Right, Up/Down, wrapping), Home / End to jump to the ends, and a roving `tabIndex={selected ? 0 : -1}` so the whole group is one Tab stop from the outside. The radio pattern now works the way assistive tech expects.
+
+**Note `<article>`s: dropped the spurious `tabIndex={0}`.** Every card was a focus stop with no activation — Tab to a card, press Enter, nothing happens. On a board with ~29 visible notes that's ~29 empty stops before the next meaningful control. Screen-reader users navigate articles via the quick-nav key (they do not need them in the Tab order); sighted keyboard users already have the canvas region as a focus stop with arrow-key pan. The reveal button in list mode remains the real interactive element and keeps `focus-visible:opacity-100`.
+
+**Accessible descriptions on every note.** `<article aria-labelledby>` named each note by its text, but the "New" badge, author, and relative time were not part of that name — article quick-nav in a screen reader heard only the note text. Added `aria-describedby` pointing at an `sr-only` span that composes `"Posted in the last 24 hours. By Alice, 2 hours ago."` The visible footer is unchanged; quick-nav now hears the whole sticky.
+
+**Debounced summary announcer.** The header summary carried `role="status" aria-live="polite"`, which fired on every filter toggle — multi-click selections spammed the AT queue with intermediate counts (`"Showing 195…"`, `"Showing 188…"`, `"Showing 182…"`). Split the concern: the visible `<p>` updates instantly for sighted users with no live semantics; a new sr-only `SummaryAnnouncer` holds the announcement, debounces 500 ms, and emits one final settled count.
+
+**Board region label + visible keyboard hint.** The canvas's `aria-label` used to encode both the note count and the full keyboard shortcut list — a mouthful that was read in full on every focus. Split into a concise `aria-label="Board canvas, N notes"` plus `aria-describedby` pointing at a visible "Arrow keys pan · Home recenters · + − zoom · 0 resets" pill. The pill is hidden by default and fades in under `group-focus-visible/board:opacity-100` so pointer users never see it while sighted-keyboard users get the hint exactly when they need it.
+
+### Tests
+
+All existing tests stayed green after the changes (89 unit + 18 e2e). One `NoteCard` unit test needed a scope tightening: the `<time>` element's text (`"2 hours ago"`) now also appears inside the sr-only description span, so `getByText(/2 hours ago/i)` matched both nodes. Switched the assertion to a scoped `container.querySelector('time')` so the intent stays pinned to the real element.
+
+### Deferred, and why
+
+- **Tooltip on `<time>` that also fires on keyboard focus.** Today the title-attribute tooltip surfaces on hover only; swapping to Radix Tooltip would wire keyboard focus too. The `<time>` element text + `dateTime` attribute is already accessible, so this is a polish item, not a compliance one.
+- **`aria-roledescription` on the canvas.** Short label + description already covers WCAG AA; roledescription would make the region more self-describing on less-common ATs, at the cost of slightly denser semantics.
+
+---
+
 ## Time log
 
 - Stage 1 — scaffold, tooling, design system, docs skeleton: _~45 minutes_
@@ -573,3 +592,4 @@ The trade-off: if we later want runtime-switchable themes (high-contrast mode, p
 - Stage 11 — docs housekeeping (counts, structure, next steps rewrite): _~10 minutes_
 - Stage 12 — mobile responsive (Sheet sidebar, responsive toolbar + header, touch targets): _~40 minutes_
 - Stage 13 — dark mode (Zustand theme store, ThemeSync to `<html class="dark">`, palette dark variants, cycling toggle): _~35 minutes_
+- Stage 14 — accessibility polish (radiogroup keyboard nav, note focusability, accessible descriptions, debounced announcer, canvas label split, visible shortcut hint): _~30 minutes_

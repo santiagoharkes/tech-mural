@@ -134,6 +134,51 @@ AI assistance (Claude Code) was used as a pair programmer: driving scaffolding, 
 
 ---
 
+## Stage 2 — data layer
+
+### Domain shape
+
+The brief shows `{ id, text, x, y, author, color, createdAt }` on the wire. We keep that shape verbatim so the UI contract does not drift from a hypothetical real API. Colors are a string-literal union (`NOTE_COLORS as const`) so the compiler catches typos and we can iterate the palette in one place.
+
+A separate `Author` entity carries the display name. Storing only an author ID on the note keeps the payload denormalised cheaply and lets us swap author details in an aggregation pass without touching every note.
+
+Responses come back as a typed envelope (`NotesResponse`) — a bare array would leave nowhere to grow (cursors, board identity, sync markers). The cost is one extra `.notes` dereference and it pays for itself on the first contract change.
+
+### Deterministic dataset
+
+Tests assert "200 notes, 8 authors, some number recent". Randomness would have made those assertions flaky from day one. The fixture is generated with a seeded Mulberry32 PRNG — small, fast, fine for fixtures; not for crypto. The same seed gives the same dataset on every machine, in every CI run, forever.
+
+Two shaping decisions worth calling out:
+
+- **Recency bias** (`u ** 2`): squaring the uniform roll pulls creation times toward the recent end of the window. Without it, "recent activity" in Stage 5 would look uniform with the rest of the board; with it, there is something to highlight.
+- **Positions are uniformly scattered across a 4000×3000 canvas**: closer to reality would be cluster-biased (workshops pile notes around themes), but that is trivially swappable once the board view exists and it is not on the critical path for the challenge.
+
+### MSW as the only backend
+
+The brief explicitly lists MSW as acceptable. We chose it because it lets us demonstrate **realistic** fetch semantics — a service worker intercepts the real `fetch`, includes a small latency, and can be overridden per-test. The alternative (a JSON import) would have made loading/error states untestable without fake React-level plumbing.
+
+One handler file (`src/mocks/handlers.ts`) is the integration boundary: swapping to a real backend deletes that file and leaves every consumer of `useNotesQuery` untouched. The browser worker (`browser.ts`) and the node server (`server.ts`) share those handlers verbatim — tests and the running app agree by construction.
+
+### TanStack Query defaults
+
+- `staleTime: 60s` — filters and sort changes are client-side derivations; the cache does not need to refetch for them.
+- `refetchOnWindowFocus: false` — the board is an active canvas; unannounced refetches would jitter it.
+- `retry: 1` — one retry smooths transient failures without hiding a genuine outage.
+- Test clients disable retries and use a 0ms `gcTime` so error paths resolve instantly.
+
+`useNotesQuery` is generic over `select` so callers derive data (counts, filtered lists, groupings) without inflating the cache footprint. One network request, one cache entry, many views.
+
+### Provider boundary
+
+`main.tsx` is the single composition root: MSW bootstrap → `QueryClientProvider` → `App`. Devtools mount only in `import.meta.env.DEV` so production builds stay clean. The same pattern will layer `nuqs` and the Zustand provider in Stage 4 without any churn below.
+
+### Visible in the UI
+
+`App.tsx` now surfaces loading / success / error states on top of the real query, with the summary announced via `role="status"` / `aria-live="polite"` so assistive tech is not left guessing. The error state ships a retry button so the failure mode is usable, not just reported.
+
+---
+
 ## Time log
 
 - Stage 1 — scaffold, tooling, design system, docs skeleton: _~45 minutes_
+- Stage 2 — types, seeded dataset, MSW, TanStack Query, tests: _~40 minutes_

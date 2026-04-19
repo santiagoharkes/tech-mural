@@ -512,6 +512,39 @@ Both signatures default `scale = 1`, so every existing call site stays green wit
 
 ---
 
+## Stage 12 — mobile responsive
+
+Closes the last P1 from the `impeccable:audit` — same feature set on a 360 px phone as on a 1440 px desktop.
+
+### Shape
+
+- **FilterBar split into two exports**: `FilterBarContent` (the inner panel body — header, clear button, `AuthorFilter`, `ColorFilter`, loading state) and `FilterBar` (the desktop `<aside>` wrapper with `hidden md:flex`). Zero duplication: the desktop sidebar and the mobile drawer render the exact same inner tree.
+- **`<MobileFilterSheet>`** wraps a shadcn `Sheet` (Radix Dialog under the hood). The trigger is a `<Button>` with a `SlidersHorizontal` icon and a live count badge (`activeCount > 0`). The sheet slides in from the left at `w-[min(90vw,20rem)]` and drops `FilterBarContent` inside. `md:hidden` hides the trigger on desktop; the desktop sidebar hides below `md`. One of the two is always visible.
+- **Responsive header**: the subtitle is `hidden sm:block`, the title scales from `text-base` to `text-lg` at `sm`, horizontal padding goes from `px-4` to `sm:px-6`. Summary text scales from `text-xs` to `sm:text-sm`. All text `truncate`s when space is tight.
+- **Responsive toolbar**: `flex-wrap` with `gap-3` so `[MobileFilterSheet] [SortSelect] [ViewModeToggle]` stack onto two rows under sufficiently narrow viewports. `py-2` replaces the fixed `h-12` so the wrapped row gets room.
+- **Touch targets**: filter rows went from `space-y-1.5` to individual `py-1.5 gap-3` with `py-1` on the `<Label>` — effective hit area is now ~40 px instead of ~24 px. Passes WCAG 2.5.8 (Target Size Minimum) comfortably.
+
+### Why one component, two wrappers
+
+The desktop sidebar and the mobile drawer are the same thing, with a different outer shell. Creating a `FilterBarContent` and two wrappers enforces that: any change to the filter UI lands in one file and shows up in both places by construction. The alternative — a single `FilterBar` that detects its own container type — would couple layout to content for no win.
+
+### A11y notes
+
+- `<Sheet>` from shadcn is Radix Dialog; focus is trapped in the drawer while it is open, `Escape` closes it, and the overlay click dismisses. Free with the primitive.
+- The trigger button's `aria-label` reports the active count (`Filters, 3 active`) so screen readers hear more than just "Filters" when a badge is showing.
+- `SheetHeader` carries a `SheetTitle` and `SheetDescription`; both are `sr-only` so sighted users keep the clean look while AT users get a named region.
+
+### Testing
+
+- `tests/e2e/mobile.spec.ts` runs with `test.use({ viewport: { width: 390, height: 844 } })` (no webkit required — we stay in chromium to keep the install path lean). Two specs: desktop sidebar is hidden, mobile trigger is visible with the expected accessible name; opening the sheet, toggling Ada Lovelace, seeing `?authors=user_1` in the URL, closing, and seeing the trigger's accessible name update to `Filters, 1 active`.
+- All prior specs remain green at the default 1280×720 viewport.
+
+### Why we stayed in chromium
+
+Playwright's `devices['iPhone 13']` uses webkit. Adding it would mean another download + install step. The behaviour under test is layout and event wiring, not engine-specific rendering. A viewport override in chromium exercises the same code paths we care about and keeps `pnpm exec playwright install chromium` as the one command a reviewer has to run.
+
+---
+
 ## Time log
 
 - Stage 1 — scaffold, tooling, design system, docs skeleton: _~45 minutes_
@@ -524,3 +557,5 @@ Both signatures default `scale = 1`, so every existing call site stays green wit
 - Stage 8 — write-up + README polish: _~20 minutes_
 - Stage 9 — list → board reveal with deep-linkable `?focus=` + highlight ring: _~40 minutes_
 - Stage 10 — wheel + keyboard zoom, cursor-anchored zoom-to-point, scale-aware culling and centring: _~35 minutes_
+- Stage 11 — docs housekeeping (counts, structure, next steps rewrite): _~10 minutes_
+- Stage 12 — mobile responsive (Sheet sidebar, responsive toolbar + header, touch targets): _~40 minutes_

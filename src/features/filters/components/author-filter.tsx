@@ -20,17 +20,17 @@ export function AuthorFilter({ authors, selected, counts, onToggle }: AuthorFilt
   return (
     <fieldset className="space-y-2" data-testid="author-filter">
       <legend className="text-foreground text-sm font-medium">By author</legend>
-      <ul className="space-y-1.5">
+      <ul>
         {authors.map((author) => {
           const id = `author-${author.id}`
           const checked = selectedSet.has(author.id)
           const count = counts.get(author.id) ?? 0
           return (
-            <li key={author.id} className="flex items-center gap-2">
+            <li key={author.id} className="flex items-center gap-3 py-1.5">
               <Checkbox id={id} checked={checked} onCheckedChange={() => onToggle(author.id)} />
               <Label
                 htmlFor={id}
-                className="flex flex-1 cursor-pointer items-center justify-between text-sm font-normal"
+                className="flex flex-1 cursor-pointer items-center justify-between py-1 text-sm font-normal"
               >
                 <span>{author.name}</span>
                 <span className="text-muted-foreground tabular-nums">{count}</span>

@@ -8,11 +8,11 @@ import { AuthorFilter } from './author-filter'
 import { ColorFilter } from './color-filter'
 
 /**
- * Sidebar filter panel. Subscribes to the full notes dataset to derive counts
- * for every filter option. Kept cache-cheap: `useNotesQuery` dedupes with the
- * other consumers so this does not cost a second network request.
+ * Inner content of the filter panel. Renders header + AuthorFilter +
+ * ColorFilter. Extracted from `FilterBar` so the mobile Sheet can reuse the
+ * exact same UI without re-implementing the layout.
  */
-export function FilterBar() {
+export function FilterBarContent() {
   const { data, isPending } = useNotesQuery()
   const { filters, toggleAuthor, toggleColor, clear, activeCount } = useBoardFilters()
 
@@ -25,11 +25,7 @@ export function FilterBar() {
   }, [data])
 
   return (
-    <aside
-      aria-label="Filters"
-      data-testid="filter-bar"
-      className="border-border/70 bg-background flex w-72 shrink-0 flex-col gap-4 border-r p-5"
-    >
+    <div className="flex h-full flex-col gap-4">
       <header className="flex items-center justify-between">
         <h2 className="text-base font-semibold tracking-tight">Filters</h2>
         <Button
@@ -63,6 +59,26 @@ export function FilterBar() {
           <ColorFilter selected={filters.colors} counts={counts.byColor} onToggle={toggleColor} />
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Desktop sidebar filter panel. Hidden on narrow viewports; the mobile
+ * `MobileFilterSheet` takes over below the `md` breakpoint.
+ *
+ * Subscribes to the full notes dataset to derive counts for every filter
+ * option. Kept cache-cheap: `useNotesQuery` dedupes with the other consumers
+ * so this does not cost a second network request.
+ */
+export function FilterBar() {
+  return (
+    <aside
+      aria-label="Filters"
+      data-testid="filter-bar"
+      className="border-border/70 bg-background hidden w-72 shrink-0 flex-col border-r p-5 md:flex"
+    >
+      <FilterBarContent />
     </aside>
   )
 }

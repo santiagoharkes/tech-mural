@@ -91,7 +91,7 @@ Feature directories (`src/features/notes`, `src/features/filters`, `src/mocks`) 
 | 2     | Notes domain types, MSW mock, TanStack Query hook | ✅     |
 | 3     | Spatial board view with note component            | ✅     |
 | 4     | Author + color filters, URL-synced state          | ✅     |
-| 5     | Sort options + recent-activity highlighting       | ⏳     |
+| 5     | Sort options + recent-activity highlighting       | ✅     |
 | 6     | Performance pass (viewport culling, memoisation)  | ⏳     |
 | 7     | Accessibility pass                                | ⏳     |
 | 8     | Final write-up (decisions, tradeoffs, next steps) | ⏳     |

@@ -266,9 +266,66 @@ Shipped behaviour: the board keeps its spatial integrity; the header surfaces "S
 
 ---
 
+## Stage 5 — sort, recent highlight, and list view
+
+### What Stage 5 actually shipped
+
+Three user-visible features:
+
+1. A **"New" badge** on any note whose `createdAt` is inside a configurable recency window (24 h by default).
+2. A **sort dropdown** with four orderings (most-recent / oldest / author / position) persisted in the URL.
+3. A **view-mode toggle** between the spatial board and a responsive list grid, persisted in `localStorage` via Zustand.
+
+The view-mode toggle also closes the "filtered notes are off-screen" UX gap from Stage 4: a user who applies a filter can flip to list mode and see every match in a compact grid, regardless of where each note sits on the 4000×3000 canvas.
+
+### Where each piece of state now lives (final map)
+
+| Concern                   | Source of truth             | Lifetime                       |
+| ------------------------- | --------------------------- | ------------------------------ |
+| Notes + authors           | React Query cache           | Until `gcTime` (5 min default) |
+| Filter (authors, colors)  | URL (`nuqs`)                | Navigation / reload / share    |
+| Sort                      | URL (`nuqs`)                | Navigation / reload / share    |
+| View mode (board vs list) | Zustand + `persist` / local | Per-browser preference         |
+| Pan offset                | Component state             | Until component unmounts       |
+
+One rule, applied every time: if another user viewing the same link should see the same thing, it goes in the URL. If "my preference on my laptop" should carry across sessions, it goes in Zustand with `persist`. Everything else stays component-local.
+
+### Sort semantics
+
+- `recent` (default) and `oldest` sort by `createdAt` — lexicographic compare on ISO-8601 strings is both correct and faster than parsing into `Date` once per comparator.
+- `author` sorts A–Z, then falls back to most-recent within an author so bigger contributors do not jumble at the top.
+- `position` reads top-to-bottom, then left-to-right — the obvious order a human uses to scan a board.
+- Every branch falls back to `id` as the final tiebreaker because the fixture guarantees stable IDs; sort should never look random.
+
+Unknown values in `?sort=` are filtered out by `parseAsStringLiteral(SORT_OPTIONS)` — the URL boundary is the last place where we accept garbage.
+
+### Recency as a pure function
+
+`isRecentNote(note, now?, windowMs?)` is pure and takes both `now` and the window as arguments. Default `now` is `new Date()`; tests always pass a fixed clock. Default window is 24 h; the argument exists so a live-session mode (for example "last 15 min") is a config change, not a code fork.
+
+### Why view mode goes in Zustand, not in the URL
+
+View mode is **preference**, not **intent**. Two users sharing the same filter/sort link may legitimately prefer different renderings. Putting it on the URL would force a preference into a shared payload. Zustand with `persist` + `localStorage` matches the real requirement: "my choice, on my machine, across sessions."
+
+The store is shaped as a slice with `viewMode`, `setViewMode`, and `toggleViewMode`. Additional transient UI state (hovered note id, open panels, in-progress selections) will compose as sibling slices in the same store without re-architecting.
+
+### `NoteCard` vs `NoteListItem`
+
+We did not introduce a `layout="spatial" | "list"` prop on `NoteCard`. Instead `NoteListItem` is a sibling component that shares the palette and recency behaviour but owns its own CSS context (`relative` inside a CSS grid vs `absolute` on the spatial canvas). Two components, one responsibility each — the duplication is trivial, the clarity is not.
+
+### Testing
+
+- **Pure**: `sortNotes` gets the exhaustive matrix (all four sorts, tie-break, non-mutation). `isRecentNote` covers in-window, out-of-window, and custom window.
+- **Hook**: `useBoardSort` under `NuqsTestingAdapter` asserts default, hydration, unknown-value rejection, and setter.
+- **Store**: `useViewModeStore` covers read, set, toggle, and `localStorage` persistence.
+- **E2E**: one spec per user-visible capability — sort writes to URL, list view survives reload (proves the persist middleware), "new" badges render.
+
+---
+
 ## Time log
 
 - Stage 1 — scaffold, tooling, design system, docs skeleton: _~45 minutes_
 - Stage 2 — types, seeded dataset, MSW, TanStack Query, tests: _~40 minutes_
 - Stage 3 — NoteCard, NoteBoard, pan, color tokens, tests: _~45 minutes_
 - Stage 4 — filters (nuqs URL state), FilterBar UI, integration tests, Playwright e2e: _~55 minutes_
+- Stage 5 — recent highlight, sort, view-mode (Zustand persist), list view, tests: _~50 minutes_

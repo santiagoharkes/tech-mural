@@ -3,6 +3,8 @@ import { useBoardFilters } from '@/features/filters/api/use-board-filters'
 import { applyNoteFilters } from '@/features/filters/lib/filter-notes'
 import { FilterBar } from '@/features/filters/components/filter-bar'
 import { NoteBoard } from '@/features/notes/components/note-board'
+import { SortSelect } from '@/features/notes/components/sort-select'
+import { ViewModeToggle } from '@/features/view-mode/components/view-mode-toggle'
 
 export default function App() {
   return (
@@ -10,9 +12,12 @@ export default function App() {
       <AppHeader />
       <div className="flex flex-1 overflow-hidden">
         <FilterBar />
-        <main aria-label="Board canvas" className="flex-1 overflow-hidden">
-          <NoteBoard />
-        </main>
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <BoardToolbar />
+          <main aria-label="Board canvas" className="flex-1 overflow-hidden">
+            <NoteBoard />
+          </main>
+        </div>
       </div>
     </div>
   )
@@ -67,5 +72,18 @@ function AppHeader() {
         {summary}
       </p>
     </header>
+  )
+}
+
+/** Toolbar above the board: sort + view-mode controls. */
+function BoardToolbar() {
+  return (
+    <div
+      className="border-border/70 bg-background/60 flex h-12 shrink-0 items-center justify-between gap-4 border-b px-4"
+      data-testid="board-toolbar"
+    >
+      <SortSelect />
+      <ViewModeToggle />
+    </div>
   )
 }

@@ -45,4 +45,18 @@ describe('<NoteCard />', () => {
     expect(time.tagName).toBe('TIME')
     expect(time).toHaveAttribute('dateTime', '2026-04-19T10:00:00Z')
   })
+
+  it('marks notes in the last 24 h as recent with a badge', () => {
+    render(<NoteCard note={NOTE} authorName="Ada" now={NOW} />)
+    const card = screen.getByRole('article')
+    expect(card).toHaveAttribute('data-recent', 'true')
+    expect(screen.getByTestId('recent-badge')).toHaveTextContent(/new/i)
+  })
+
+  it('does not badge notes outside the recency window', () => {
+    const old: Note = { ...NOTE, createdAt: '2026-04-15T10:00:00Z' }
+    render(<NoteCard note={old} authorName="Ada" now={NOW} />)
+    expect(screen.getByRole('article')).not.toHaveAttribute('data-recent')
+    expect(screen.queryByTestId('recent-badge')).not.toBeInTheDocument()
+  })
 })

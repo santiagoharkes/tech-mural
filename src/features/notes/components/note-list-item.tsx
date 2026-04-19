@@ -5,23 +5,23 @@ import type { Note } from '@/features/notes/types'
 import { NOTE_COLOR_PALETTE, noteColorClasses } from '@/features/notes/lib/note-colors'
 import { isRecentNote } from '@/features/notes/lib/recency'
 
-export interface NoteCardProps {
+export interface NoteListItemProps {
   note: Note
-  /** Resolved author display name. Passed in (not looked up here) so the card stays pure. */
   authorName: string
-  /** "Now" reference for relative timestamps + recency window. Injectable for deterministic tests. */
   now?: Date
 }
 
 /**
- * A single sticky note on the board. Presentational and memoised — the parent
- * owns the data. Positioned absolutely via `style` so that a render pass of
- * one card does not trigger the spatial container to reflow.
+ * List-view counterpart to `NoteCard`. Same palette, same a11y semantics,
+ * but relative (not absolute) positioning — it lives inside a CSS grid in
+ * `<NoteList />`. Factoring this out (rather than forking `NoteCard` with a
+ * layout prop) keeps each component single-purpose and keeps CSS concerns
+ * close to the component that actually lays them out.
  */
-function NoteCardImpl({ note, authorName, now }: NoteCardProps) {
-  const { id, text, x, y, color, createdAt } = note
+function NoteListItemImpl({ note, authorName, now }: NoteListItemProps) {
+  const { id, text, color, createdAt } = note
   const palette = NOTE_COLOR_PALETTE[color]
-  const labelId = `note-${id}-text`
+  const labelId = `list-note-${id}-text`
   const recent = isRecentNote(note, now)
 
   return (
@@ -30,16 +30,13 @@ function NoteCardImpl({ note, authorName, now }: NoteCardProps) {
       data-testid="note-card"
       data-color={color}
       data-recent={recent ? 'true' : undefined}
-      data-no-pan
       tabIndex={0}
       className={cn(
-        'absolute w-44 rounded-md border p-3 shadow-sm transition-transform',
+        'relative rounded-md border p-3 shadow-sm transition-transform',
         'focus-visible:ring-ring/60 focus-visible:ring-2 focus-visible:outline-none',
         'hover:-translate-y-0.5 hover:shadow-md',
         noteColorClasses(color),
-        recent && 'ring-ring/40 ring-2 ring-offset-1',
       )}
-      style={{ left: `${x}px`, top: `${y}px` }}
     >
       {recent ? (
         <span
@@ -64,11 +61,5 @@ function NoteCardImpl({ note, authorName, now }: NoteCardProps) {
   )
 }
 
-/**
- * Memoisation key: the card is pure in its props. `memo` with the default
- * shallow equality is enough because `note`, `authorName`, and `now` are all
- * stable references when the parent plays by the rules (memoised selector, a
- * module-level Date for `now`).
- */
-export const NoteCard = memo(NoteCardImpl)
-NoteCard.displayName = 'NoteCard'
+export const NoteListItem = memo(NoteListItemImpl)
+NoteListItem.displayName = 'NoteListItem'

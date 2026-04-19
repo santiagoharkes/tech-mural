@@ -3,37 +3,61 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useNotesQuery } from '@/features/notes/api/notes-query'
 import { useBoardPan } from '@/features/notes/hooks/use-board-pan'
+import { useBoardSort } from '@/features/notes/hooks/use-board-sort'
 import { useBoardFilters } from '@/features/filters/api/use-board-filters'
+import { useViewMode } from '@/features/view-mode/store'
 import { applyNoteFilters } from '@/features/filters/lib/filter-notes'
+import { sortNotes } from '@/features/notes/lib/sort-notes'
 import type { Note, NotesResponse } from '@/features/notes/types'
 import { NoteCard } from './note-card'
+import { NoteList } from './note-list'
 
 /**
- * Spatial board view. Owns the data fetch, the pan interaction, and the
- * state-branching (loading / empty / error / success / filtered-empty).
- * Notes render inside a single translated layer so that a pan only updates
- * one transform — not N elements.
+ * Top-level view of the notes. Resolves {filters, sort, viewMode} into the
+ * derived list once and renders either the spatial board or the list.
+ *
+ * Every derivation is memoised on its inputs; swapping the view mode does
+ * not re-run `applyNoteFilters` or `sortNotes`.
  */
 export function NoteBoard() {
   const query = useNotesQuery({ select: selectBoardModel })
   const { filters, activeCount, clear } = useBoardFilters()
-  const { offset, bind, isPanning } = useBoardPan()
+  const { sortBy } = useBoardSort()
+  const viewMode = useViewMode()
 
-  const filtered = useMemo<Note[]>(
-    () => (query.data ? applyNoteFilters(query.data.notes, filters) : []),
-    [query.data, filters],
-  )
+  const processed = useMemo<Note[]>(() => {
+    if (!query.data) return []
+    const filtered = applyNoteFilters(query.data.notes, filters)
+    return sortNotes(filtered, sortBy)
+  }, [query.data, filters, sortBy])
 
   if (query.isPending) return <BoardSkeleton />
   if (query.isError) return <BoardError message={query.error.message} onRetry={query.refetch} />
   if (query.data.notes.length === 0) return <BoardEmpty />
-  if (filtered.length === 0) return <BoardEmptyFiltered activeCount={activeCount} onClear={clear} />
+  if (processed.length === 0) {
+    return <BoardEmptyFiltered activeCount={activeCount} onClear={clear} />
+  }
 
-  const { authorMap } = query.data
+  if (viewMode === 'list') {
+    return <NoteList notes={processed} authorMap={query.data.authorMap} />
+  }
+
+  return <SpatialBoard notes={processed} authorMap={query.data.authorMap} />
+}
+
+function SpatialBoard({
+  notes,
+  authorMap,
+}: {
+  notes: readonly Note[]
+  authorMap: ReadonlyMap<string, string>
+}) {
+  const { offset, bind, isPanning } = useBoardPan()
+
   return (
     <section
       role="region"
-      aria-label={`Board canvas, ${filtered.length} notes`}
+      aria-label={`Board canvas, ${notes.length} notes`}
       data-testid="note-board"
       className={cn(
         'bg-muted/30 relative h-full w-full touch-none overflow-hidden select-none',
@@ -46,7 +70,7 @@ export function NoteBoard() {
         className="absolute inset-0 will-change-transform"
         style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0)` }}
       >
-        {filtered.map((note) => (
+        {notes.map((note) => (
           <NoteCard
             key={note.id}
             note={note}

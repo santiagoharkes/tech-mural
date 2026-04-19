@@ -8,7 +8,7 @@ Frontend take-home for Mural. A desktop web app for exploring sticky-note activi
 
 ## Deliverables
 
-- **Source code** — this repo. Seven atomic commits, one per stage, describing exactly what shipped and why.
+- **Source code** — this repo. Ten atomic commits, one per stage, describing exactly what shipped and why.
 - **[WRITE-UP.md](./WRITE-UP.md)** — the short answers to the brief's questions (approach, assumptions, architecture, perf + a11y, UX, AI usage, tradeoffs, time).
 - **[DECISIONS.md](./DECISIONS.md)** — the long-form stage-by-stage rationale, design-system candidate analysis, audit findings, and memoisation notes.
 - **Screenshots per stage** in [`docs/screenshots/`](./docs/screenshots/).
@@ -30,8 +30,8 @@ First launch may take a few seconds while the MSW service worker registers; afte
 ### Test suite
 
 ```bash
-pnpm test:run               # Vitest unit + integration (72 tests)
-pnpm test:e2e               # Playwright against chromium (9 specs)
+pnpm test:run               # Vitest unit + integration (85 tests)
+pnpm test:e2e               # Playwright against chromium (13 specs)
 pnpm test:coverage          # V8 coverage report in coverage/
 ```
 
@@ -109,13 +109,15 @@ src/
         note-list-item.tsx      # sticky in list mode
         sort-select.tsx         # URL-bound dropdown
       hooks/
-        use-board-pan.ts        # pointer + keyboard pan
+        use-board-pan.ts        # pointer + keyboard pan, zoom, setOffset
         use-board-sort.ts       # nuqs-backed sort state
+        use-board-focus.ts      # nuqs-backed focused-note id
       lib/
         note-colors.ts          # NoteColor → palette classes
         recency.ts              # isRecentNote
         sort-notes.ts           # pure sort with stable tie-breakers
-        viewport-culling.ts     # pure isNoteVisible
+        viewport-culling.ts     # pure isNoteVisible (scale-aware)
+        center-on-note.ts       # pure offset-to-centre for reveal
       types.ts
     filters/
       api/use-board-filters.ts  # nuqs-backed multi-select state
@@ -146,6 +148,8 @@ tests/
     filters.spec.ts
     sort-and-view.spec.ts
     a11y.spec.ts
+    reveal.spec.ts              # list → board reveal + deep-link
+    zoom.spec.ts                # wheel + keyboard zoom
 ```
 
 Every feature co-locates its components, hooks, store slice, API layer, pure helpers, and tests. Lint rules skip `src/components/ui/` because those files are vendored shadcn primitives.
@@ -156,11 +160,11 @@ Every feature co-locates its components, hooks, store slice, API layer, pure hel
 
 Three layers, each doing the job it is best at:
 
-| Layer       | Tool                           | What it covers                                                                                        |
-| ----------- | ------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| Unit        | Vitest                         | Pure functions (filter, sort, cull geometry, recency, relative-time) and the Zustand slice            |
-| Integration | Vitest + React Testing Library | Components wired to a real `QueryClient` and the nuqs testing adapter, asserted through ARIA roles    |
-| End-to-end  | Playwright (chromium)          | Critical user flows: render, filter + URL reload, clear-all, sort, list view, keyboard pan, skip link |
+| Layer       | Tool                           | What it covers                                                                                                                                |
+| ----------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit        | Vitest                         | Pure functions (filter, sort, cull geometry, recency, relative-time) and the Zustand slice                                                    |
+| Integration | Vitest + React Testing Library | Components wired to a real `QueryClient` and the nuqs testing adapter, asserted through ARIA roles                                            |
+| End-to-end  | Playwright (chromium)          | Critical user flows: render, filter + URL reload, clear-all, sort, list view, keyboard pan, skip link, reveal-on-board, wheel / keyboard zoom |
 
 Accessibility is treated as a first-class test concern — every query is role- or label-based, so missing semantics break tests first, humans second.
 

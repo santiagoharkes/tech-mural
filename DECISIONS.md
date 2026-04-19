@@ -220,8 +220,55 @@ A pan e2e test that starts a drag anywhere in the viewport would land on a stick
 
 ---
 
+## Stage 4 — filters with URL state
+
+### Where each piece of state lives
+
+The rule from Stage 1 is now enforced end-to-end:
+
+- **URL owns user intent.** `authors` and `colors` live in the query string via `nuqs`. Reloading the page restores them, a shared link restores them, and the browser back button moves through them. No other state mirror.
+- **React Query owns server data.** `useNotesQuery` remains the single cache. `FilterBar`, `AppHeader`, and `NoteBoard` all subscribe independently; TanStack Query dedupes to one network request.
+- **Pure functions own derivation.** `applyNoteFilters` takes a list and a filter object and returns a new list (or the same reference when no filter is active). `computeFilterCounts` walks the dataset once per render via `useMemo` to produce counts.
+
+Zustand is installed but intentionally unused so far. Filters are user intent and belong on the URL; Zustand will earn its keep in Stage 5 onward for genuinely transient UI state (an open panel, an ephemeral toast, the current hovered note).
+
+### nuqs parsers
+
+Parsers are defined at module scope so React Query-style referential-equality tricks work — re-creating a parser on every render would invalidate `useQueryState`'s memo. Colors use `parseAsStringLiteral(NOTE_COLORS)` so junk like `?colors=neon` is filtered out before it can reach the reducer; a strictly-typed enum on the URL boundary makes the filter pipeline a no-op for bad input instead of a runtime bomb.
+
+### Counts show possibility, not reality
+
+Each filter option shows the count **across the whole dataset**, not the count after other filters have been applied. The alternative ("live counts" that shrink as you filter) sounds nicer but is strictly worse UX: unchecking a checkbox should tell you what will come back, and it can't if the number depends on that same checkbox.
+
+### State branches grew by one
+
+`NoteBoard` now has a fifth branch, `BoardEmptyFiltered`, for "the dataset is not empty but the active filters match nothing". It carries a clear-filters button because that is the only action that moves the user forward. The original `BoardEmpty` ("the board itself is empty") is still reachable — a `GET /api/notes` that returns `{ notes: [] }` lands in that branch. Two empty states, two messages, two call-to-actions.
+
+### Testing seams
+
+- **Pure function**: `filter-notes.test.ts` covers the filter matrix (empty, single, multi, AND-combined, no-match) — six deterministic cases, zero React in the loop.
+- **Hook**: `use-board-filters.test.tsx` wraps `useBoardFilters` in `NuqsTestingAdapter` and asserts hydration, toggle, multi-toggle, unknown-value rejection, and clear.
+- **Integration**: `filter-bar.test.tsx` pairs the testing adapter with an `onUrlUpdate` observer so we assert what the URL becomes, not how we got there. A checkbox click must produce `?authors=user_1` — if nuqs or the parser change under us, this test fails at the boundary that matters.
+- **End-to-end**: three Playwright specs cover apply-a-filter, reload-preserves-state, clear-returns-to-full-dataset.
+
+### Known UX gap — deferred
+
+Filtered notes keep their original `(x, y)` on the 4000×3000 canvas. With 9 matches scattered across that space and a viewport of ~1280×720, most filtered notes are off-screen until the user pans. This is the right default for "the board is the board", but it means the feedback loop is weak.
+
+Options considered and **not** shipped in Stage 4:
+
+1. **Auto-pan to the filtered centroid** on every filter change. Fights with the user's own pan.
+2. **Reset pan on every filter toggle.** Loses the user's navigation state for no good reason.
+3. **Re-layout filtered notes in a grid.** Breaks "the board is the board" and conflicts with Stage 3's spatial invariant.
+4. **List-view toggle.** The scoped-out Stage 4 next step — implemented in Stage 5 or later.
+
+Shipped behaviour: the board keeps its spatial integrity; the header surfaces "Showing X of 200" so the user knows how many should be there; pan-to-find remains the interaction. The list-view toggle is the right next step for this and is called out in the Next steps section.
+
+---
+
 ## Time log
 
 - Stage 1 — scaffold, tooling, design system, docs skeleton: _~45 minutes_
 - Stage 2 — types, seeded dataset, MSW, TanStack Query, tests: _~40 minutes_
 - Stage 3 — NoteCard, NoteBoard, pan, color tokens, tests: _~45 minutes_
+- Stage 4 — filters (nuqs URL state), FilterBar UI, integration tests, Playwright e2e: _~55 minutes_

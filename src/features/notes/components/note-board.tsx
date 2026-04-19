@@ -1,29 +1,39 @@
 import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { useNotesQuery } from '@/features/notes/api/notes-query'
 import { useBoardPan } from '@/features/notes/hooks/use-board-pan'
-import type { NotesResponse } from '@/features/notes/types'
+import { useBoardFilters } from '@/features/filters/api/use-board-filters'
+import { applyNoteFilters } from '@/features/filters/lib/filter-notes'
+import type { Note, NotesResponse } from '@/features/notes/types'
 import { NoteCard } from './note-card'
 
 /**
  * Spatial board view. Owns the data fetch, the pan interaction, and the
- * state-branching (loading / empty / error / success). Notes are rendered
- * absolutely positioned inside a translated layer so that a pan only updates
- * one transform — not 200 elements.
+ * state-branching (loading / empty / error / success / filtered-empty).
+ * Notes render inside a single translated layer so that a pan only updates
+ * one transform — not N elements.
  */
 export function NoteBoard() {
   const query = useNotesQuery({ select: selectBoardModel })
+  const { filters, activeCount, clear } = useBoardFilters()
   const { offset, bind, isPanning } = useBoardPan()
+
+  const filtered = useMemo<Note[]>(
+    () => (query.data ? applyNoteFilters(query.data.notes, filters) : []),
+    [query.data, filters],
+  )
 
   if (query.isPending) return <BoardSkeleton />
   if (query.isError) return <BoardError message={query.error.message} onRetry={query.refetch} />
   if (query.data.notes.length === 0) return <BoardEmpty />
+  if (filtered.length === 0) return <BoardEmptyFiltered activeCount={activeCount} onClear={clear} />
 
-  const { notes, authorMap } = query.data
+  const { authorMap } = query.data
   return (
     <section
       role="region"
-      aria-label={`Board canvas, ${notes.length} notes`}
+      aria-label={`Board canvas, ${filtered.length} notes`}
       data-testid="note-board"
       className={cn(
         'bg-muted/30 relative h-full w-full touch-none overflow-hidden select-none',
@@ -36,7 +46,7 @@ export function NoteBoard() {
         className="absolute inset-0 will-change-transform"
         style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0)` }}
       >
-        {notes.map((note) => (
+        {filtered.map((note) => (
           <NoteCard
             key={note.id}
             note={note}
@@ -53,10 +63,6 @@ interface BoardModel {
   authorMap: Map<string, string>
 }
 
-/**
- * Pulled out of the component so TanStack Query memoises it by reference: the
- * returned model is stable across renders until the underlying data changes.
- */
 function selectBoardModel(response: NotesResponse): BoardModel {
   return {
     notes: response.notes,
@@ -65,8 +71,7 @@ function selectBoardModel(response: NotesResponse): BoardModel {
 }
 
 // ---------------------------------------------------------------------------
-// State branches — kept as small sub-components for readability and so tests
-// can target them through their role/testid.
+// State branches
 // ---------------------------------------------------------------------------
 
 function BoardSkeleton() {
@@ -115,13 +120,9 @@ function BoardError({ message, onRetry }: { message: string; onRetry: () => void
       data-testid="note-board-error"
     >
       <p className="text-destructive text-sm">Could not load notes: {message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium shadow-xs transition-colors"
-      >
+      <Button type="button" variant="outline" onClick={onRetry}>
         Retry
-      </button>
+      </Button>
     </section>
   )
 }
@@ -133,6 +134,26 @@ function BoardEmpty() {
       data-testid="note-board-empty"
     >
       <p>No notes on this board yet.</p>
+    </section>
+  )
+}
+
+function BoardEmptyFiltered({
+  activeCount,
+  onClear,
+}: {
+  activeCount: number
+  onClear: () => void
+}) {
+  return (
+    <section
+      className="flex h-full w-full flex-col items-center justify-center gap-3 text-center"
+      data-testid="note-board-empty-filtered"
+    >
+      <p className="text-muted-foreground text-sm">No notes match the current filters.</p>
+      <Button type="button" variant="outline" size="sm" onClick={onClear}>
+        Clear {activeCount} active filter{activeCount === 1 ? '' : 's'}
+      </Button>
     </section>
   )
 }

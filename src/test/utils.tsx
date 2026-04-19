@@ -6,6 +6,7 @@ import {
   type RenderHookOptions,
   type RenderOptions,
 } from '@testing-library/react'
+import { NuqsTestingAdapter, type OnUrlUpdateFunction } from 'nuqs/adapters/testing'
 
 /**
  * A fresh QueryClient per test keeps caches isolated and disables retries so
@@ -20,32 +21,56 @@ export function createTestQueryClient() {
   })
 }
 
-export function withQueryClient(client = createTestQueryClient()) {
+export interface ProviderOptions {
+  client?: QueryClient
+  /** Seed the URL search params (nuqs). */
+  searchParams?: string
+  /** Observe URL updates (nuqs). */
+  onUrlUpdate?: OnUrlUpdateFunction
+}
+
+export function withProviders({ client, searchParams, onUrlUpdate }: ProviderOptions = {}) {
+  const queryClient = client ?? createTestQueryClient()
   return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    return (
+      <QueryClientProvider client={queryClient}>
+        <NuqsTestingAdapter searchParams={searchParams} onUrlUpdate={onUrlUpdate}>
+          {children}
+        </NuqsTestingAdapter>
+      </QueryClientProvider>
+    )
   }
 }
 
-/** `render` pre-wrapped with a dedicated QueryClient. */
 export function renderWithClient(
   ui: ReactNode,
-  { client, ...options }: RenderOptions & { client?: QueryClient } = {},
+  { client, searchParams, onUrlUpdate, ...options }: RenderOptions & ProviderOptions = {},
 ) {
   const queryClient = client ?? createTestQueryClient()
   return {
     queryClient,
-    ...render(ui, { wrapper: withQueryClient(queryClient), ...options }),
+    ...render(ui, {
+      wrapper: withProviders({ client: queryClient, searchParams, onUrlUpdate }),
+      ...options,
+    }),
   }
 }
 
-/** `renderHook` pre-wrapped with a dedicated QueryClient. */
 export function renderHookWithClient<TProps, TResult>(
   callback: (props: TProps) => TResult,
-  { client, ...options }: RenderHookOptions<TProps> & { client?: QueryClient } = {},
+  {
+    client,
+    searchParams,
+    onUrlUpdate,
+    ...options
+  }: RenderHookOptions<TProps> & ProviderOptions = {},
 ) {
   const queryClient = client ?? createTestQueryClient()
   return {
     queryClient,
-    ...renderHook(callback, { wrapper: withQueryClient(queryClient), ...options }),
+    ...renderHook(callback, {
+      wrapper: withProviders({ client: queryClient, searchParams, onUrlUpdate }),
+      ...options,
+    }),
   }
 }

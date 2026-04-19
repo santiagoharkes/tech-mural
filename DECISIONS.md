@@ -61,7 +61,7 @@ A secondary list view, full-text search, author aggregations, activity timelines
 
 ### Candidates considered
 
-From the `awesome-design-systems` list, the options that realistically fit a Tailwind + Vite + TypeScript stack with strong accessibility were:
+I surveyed the usual options that realistically fit a Tailwind + Vite + TypeScript stack with strong accessibility out of the box:
 
 - **Radix primitives (unstyled)** — excellent accessibility, but every component needs to be styled from scratch.
 - **Mantine / Chakra UI** — batteries-included, but ship their own styling engine that fights Tailwind.

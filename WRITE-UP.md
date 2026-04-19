@@ -34,7 +34,7 @@ The first eight stages cover the brief's evaluation criteria end-to-end; stages 
 
 One rule, applied everywhere: _if a teammate opening the same link should see the same thing, it goes in the URL_. If it is a per-browser preference, it goes in Zustand. Everything else stays local. No mirror, no duplication.
 
-Selected design system: **shadcn/ui**, chosen over nine other candidates from the `awesome-design-systems` list. Ownership model puts _our_ component code in front of the reviewer; Radix underneath handles focus management, ARIA, and keyboard semantics correctly.
+Selected design system: **shadcn/ui**, chosen after weighing it against Radix primitives, Mantine / Chakra, AWS Cloudscape, GitHub Primer / Shopify Polaris / Atlassian, and Reshaped. The ownership model puts _our_ component code in front of the reviewer instead of an opaque dependency; Radix underneath handles focus management, ARIA, and keyboard semantics correctly. Full candidate-by-candidate rationale in `DECISIONS.md`.
 
 Key component-level decisions:
 

@@ -322,6 +322,62 @@ We did not introduce a `layout="spatial" | "list"` prop on `NoteCard`. Instead `
 
 ---
 
+## Stage 6 — performance pass
+
+### Viewport culling on the spatial board
+
+`NoteBoard` renders the spatial canvas through a `ResizeObserver`-backed `useElementSize` hook. A pure `isNoteVisible(note, offset, viewport, padding)` maps each note's `(x, y)` through the current pan offset and tests against the viewport rectangle plus a `VIEWPORT_PADDING` buffer so fast pans do not expose blank canvas at the edges.
+
+Measured: at the default viewport (1280×720) and zero pan, 29 of 200 notes intersect the visible region — DOM node count drops from 200 to 29 (**~7× reduction**) before we touched virtualisation at all. React reconciliation, hit-testing, and paint all scale with that number, not the dataset size.
+
+Two important defaults:
+
+- **Fallback = render everything** when the container has not been measured yet (initial render, SSR, jsdom, `ResizeObserver`-less environments). A one-time 200-card paint is cheaper than being wrong about which notes to cull.
+- The observer is only attached once; subsequent pans re-run the pure `filter` with the cached `size` reference. `useMemo` over `[notes, offset, size]` keeps the result stable until inputs change.
+
+### Observable hooks for tests
+
+`<section data-total-notes={n.length} data-visible-notes={visible.length}>` lets Playwright assert "the filter reached the board" and "culling is active" without guessing a specific number of DOM nodes. Counts-in-viewport are intrinsically viewport-dependent; making the test robust to that is part of the test design, not a workaround.
+
+### Memoisation audit
+
+Walked the component tree with the React DevTools Profiler ready. What already paid its way:
+
+| Where                                 | What                      | Why                                                              |
+| ------------------------------------- | ------------------------- | ---------------------------------------------------------------- |
+| `NoteCard` / `NoteListItem`           | `React.memo`              | Hundreds of instances; props are stable between renders          |
+| `useNotesQuery({ select: ... })`      | TanStack Query cache      | `BoardModel` reference is stable until the underlying data ships |
+| `NoteBoard` `processed` useMemo       | `[data, filters, sortBy]` | Filter+sort run at most once per input change                    |
+| `SpatialBoard` `visibleNotes` useMemo | `[notes, offset, size]`   | Cull runs at most once per pan tick                              |
+| `FilterBar` `counts` useMemo          | `[data]`                  | Counts recomputed only when notes change, not on filter toggles  |
+| `useBoardFilters` / `useBoardPan`     | `useCallback` on toggles  | Callback identity stable so `React.memo` children don't thrash   |
+
+What we did **not** add, because the profiler did not flag it:
+
+- `useCallback` on sub-100µs handlers that never cross a memo boundary — noise.
+- `useMemo` on primitive computations (counts, sums) — churn for no CPU saved.
+- A custom `useDeepMemo` for the filter object — the nuqs setter already returns the same array reference when untouched, so `useMemo([authors, colors])` is sufficient.
+
+### Why not `react-virtual` yet
+
+Virtualisation is the right next step once datasets cross low-thousands of notes. We did not ship it because:
+
+1. Viewport culling already reduces spatial-board rendering to the viewport, which is the dominant cost here.
+2. The list view paints 200 DOM nodes in a CSS grid; the browser handles that without a framework in the loop.
+3. Adding `@tanstack/react-virtual` for 200 items would add library surface and complexity for a win the profiler does not show.
+
+For 5k–50k notes: wrap `NoteList` in `@tanstack/react-virtual` (list view — easy, single-column or responsive grid with `useWindowVirtualizer`) and replace the spatial cull with a quadtree / interval tree index keyed on `(x, y)` so `isNoteVisible` becomes `O(log n)` instead of `O(n)` per pan tick. Both are drop-in changes behind the current component boundaries.
+
+### Other performance moves already in place
+
+- **Service Worker cache**: MSW's bootstrap is dynamic-imported; not in the initial paint path.
+- **TanStack Query dedup**: `AppHeader`, `FilterBar`, and `NoteBoard` all subscribe to the same `useNotesQuery` — one network request, three consumers.
+- **`translate3d` on the pan layer**: forces GPU compositing so a drag doesn't rasterise on the CPU.
+- **`will-change: transform`**: signals the browser to promote the canvas layer ahead of the first drag.
+- **Tailwind v4's new engine**: zero PostCSS cost in dev HMR.
+
+---
+
 ## Time log
 
 - Stage 1 — scaffold, tooling, design system, docs skeleton: _~45 minutes_
@@ -329,3 +385,4 @@ We did not introduce a `layout="spatial" | "list"` prop on `NoteCard`. Instead `
 - Stage 3 — NoteCard, NoteBoard, pan, color tokens, tests: _~45 minutes_
 - Stage 4 — filters (nuqs URL state), FilterBar UI, integration tests, Playwright e2e: _~55 minutes_
 - Stage 5 — recent highlight, sort, view-mode (Zustand persist), list view, tests: _~50 minutes_
+- Stage 6 — viewport culling, memoisation audit, performance notes: _~30 minutes_

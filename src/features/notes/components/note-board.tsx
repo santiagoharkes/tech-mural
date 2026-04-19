@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { useElementSize } from '@/lib/use-element-size'
 import { useNotesQuery } from '@/features/notes/api/notes-query'
 import { useBoardPan } from '@/features/notes/hooks/use-board-pan'
 import { useBoardSort } from '@/features/notes/hooks/use-board-sort'
@@ -8,6 +9,7 @@ import { useBoardFilters } from '@/features/filters/api/use-board-filters'
 import { useViewMode } from '@/features/view-mode/store'
 import { applyNoteFilters } from '@/features/filters/lib/filter-notes'
 import { sortNotes } from '@/features/notes/lib/sort-notes'
+import { isNoteVisible } from '@/features/notes/lib/viewport-culling'
 import type { Note, NotesResponse } from '@/features/notes/types'
 import { NoteCard } from './note-card'
 import { NoteList } from './note-list'
@@ -53,12 +55,24 @@ function SpatialBoard({
   authorMap: ReadonlyMap<string, string>
 }) {
   const { offset, bind, isPanning } = useBoardPan()
+  const [containerRef, size] = useElementSize<HTMLElement>()
+
+  // Viewport culling. We fall back to rendering everything until the
+  // container has been measured (initial render, jsdom, no-ResizeObserver
+  // environments) — a one-time 200-card paint is cheaper than a wrong cull.
+  const visibleNotes = useMemo(() => {
+    if (size.width === 0 || size.height === 0) return notes
+    return notes.filter((note) => isNoteVisible(note, offset, size))
+  }, [notes, offset, size])
 
   return (
     <section
+      ref={containerRef}
       role="region"
       aria-label={`Board canvas, ${notes.length} notes`}
       data-testid="note-board"
+      data-total-notes={notes.length}
+      data-visible-notes={visibleNotes.length}
       className={cn(
         'bg-muted/30 relative h-full w-full touch-none overflow-hidden select-none',
         isPanning ? 'cursor-grabbing' : 'cursor-grab',
@@ -70,7 +84,7 @@ function SpatialBoard({
         className="absolute inset-0 will-change-transform"
         style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0)` }}
       >
-        {notes.map((note) => (
+        {visibleNotes.map((note) => (
           <NoteCard
             key={note.id}
             note={note}

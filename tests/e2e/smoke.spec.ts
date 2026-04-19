@@ -12,12 +12,16 @@ test.describe('Smoke', () => {
     await expect(summary).toContainText('200')
     await expect(summary).toContainText('8')
 
+    // The spatial board culls notes to the viewport. We assert the dataset
+    // total via `data-total-notes` and that at least one card is on screen.
     const board = page.getByTestId('note-board')
     await expect(board).toBeVisible()
-
-    // At least a dozen notes should be visible in the default viewport.
+    await expect(board).toHaveAttribute('data-total-notes', '200')
     await expect(board.getByTestId('note-card').first()).toBeVisible()
-    const count = await board.getByTestId('note-card').count()
-    expect(count).toBe(200)
+
+    const visible = await board.getAttribute('data-visible-notes')
+    const visibleCount = Number(visible)
+    expect(visibleCount).toBeGreaterThan(0)
+    expect(visibleCount).toBeLessThanOrEqual(200)
   })
 })

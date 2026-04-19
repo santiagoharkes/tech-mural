@@ -178,7 +178,50 @@ One handler file (`src/mocks/handlers.ts`) is the integration boundary: swapping
 
 ---
 
+## Stage 3 — spatial board view
+
+### Component split
+
+Three sharply-scoped components:
+
+- **`NoteCard`** — a single note. Pure, memoised, positioned absolutely via inline `left`/`top`. Accepts a resolved `authorName` instead of looking authors up itself, so the component stays colorblind to how the parent sourced it.
+- **`NoteBoard`** — the spatial container. Owns the query, owns the pan, and branches loading/empty/error/success. Notes render inside a single translated layer so pan updates one transform, not 200.
+- **`AppHeader`** — subscribes to the same `useNotesQuery` as the board. React Query dedupes the request, so both components see the same cache entry without any prop-drilling or lifted state.
+
+### Pan without `setPointerCapture`
+
+The pan hook attaches `pointermove` / `pointerup` to `window` while a drag is active. We deliberately avoided `setPointerCapture` — jsdom does not implement it, so relying on it would have forced every pan test to run in Playwright. The `window`-listener pattern is just as robust for a canvas that fills the viewport, and it keeps the unit-test surface 100 % in Vitest.
+
+Notes carry `data-no-pan`; the hook shorts out when a pointerdown originates inside that attribute, so clicks and focus still work through them.
+
+### Color tokens live in one file
+
+Every `NoteColor → { surface, border, foreground, accent }` mapping lives in `features/notes/lib/note-colors.ts`. `NoteCard` never names a Tailwind color class directly. Re-theming the palette is a search-and-replace in one file, and there is exactly one visual regression target for color changes.
+
+### State branches as sub-components
+
+Loading, empty, and error are sub-components inside `note-board.tsx`, each with its own `data-testid`. That let us:
+
+- Assert each branch in isolation from integration tests with targeted MSW overrides.
+- Keep the main board render path readable — one early return per branch, no nested conditionals.
+- Ship an empty state and a retryable error state (`<button>Retry</button>`) from day one, without waiting for a "polish pass".
+
+### Accessibility
+
+- `<article>` per note with `aria-labelledby` pointing at the text → screen readers announce the text as the note's name.
+- `role="region"` on the board with a dynamic `aria-label` reporting the count.
+- `<time dateTime={iso}>` so assistive tech and browsers can parse the timestamp; the label itself comes from `Intl.RelativeTimeFormat` (`numeric: 'auto'` so "yesterday" wins over "1 day ago").
+- Focusable notes (`tabIndex={0}`) with a visible ring via `focus-visible:ring-ring/60`.
+- The board header announces the note/contributor totals via `role="status"` / `aria-live="polite"`.
+
+### Interactive-pan end-to-end test: deferred
+
+A pan e2e test that starts a drag anywhere in the viewport would land on a sticky note roughly 50 % of the time (notes carry `data-no-pan`, so the drag is intentionally no-ops'd). Solving that needs either (a) a predictable empty area, (b) a programmatic "pan by X/Y" escape hatch on the component, or (c) dispatching events directly at the section element. The pan hook is already covered by four focused Vitest cases that assert pointer delta, skip behaviour, button filter, and offset accumulation — that is the layer where the behaviour actually lives. We will revisit the e2e in Stage 5 once a predictable empty corner exists (e.g. after filters reduce the note count).
+
+---
+
 ## Time log
 
 - Stage 1 — scaffold, tooling, design system, docs skeleton: _~45 minutes_
 - Stage 2 — types, seeded dataset, MSW, TanStack Query, tests: _~40 minutes_
+- Stage 3 — NoteCard, NoteBoard, pan, color tokens, tests: _~45 minutes_

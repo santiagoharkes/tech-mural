@@ -10,7 +10,7 @@ Frontend take-home for Mural. A desktop web app for exploring sticky-note activi
 
 - **Source code** — this repo. Ten atomic commits, one per stage, describing exactly what shipped and why.
 - **[WRITE-UP.md](./WRITE-UP.md)** — the short answers to the brief's questions (approach, assumptions, architecture, perf + a11y, UX, AI usage, tradeoffs, time).
-- **[DECISIONS.md](./DECISIONS.md)** — the long-form stage-by-stage rationale, design-system candidate analysis, audit findings, and memoisation notes.
+- **[DECISIONS.md](./DECISIONS.md)** — the long-form stage-by-stage rationale, audit findings, and memoisation notes.
 - **Screenshots per stage** in [`docs/screenshots/`](./docs/screenshots/).
 
 ---

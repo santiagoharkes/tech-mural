@@ -57,39 +57,6 @@ A secondary list view, full-text search, author aggregations, activity timelines
 
 ---
 
-## Design system: shadcn/ui
-
-### Candidates considered
-
-I surveyed the usual options that realistically fit a Tailwind + Vite + TypeScript stack with strong accessibility out of the box:
-
-- **Radix primitives (unstyled)** — excellent accessibility, but every component needs to be styled from scratch.
-- **Mantine / Chakra UI** — batteries-included, but ship their own styling engine that fights Tailwind.
-- **AWS Cloudscape** — strong for data-heavy admin UIs, but heavy visual opinion from a specific brand.
-- **GitHub Primer / Shopify Polaris / Atlassian Design System** — polished, but bring a brand identity that would overshadow ours in an interview context.
-- **Reshaped** — modern and a11y-aware, but licensing constraints on the Figma kit.
-- **shadcn/ui** — Radix under the hood, Tailwind-native, components copied into the repo.
-
-### Why shadcn/ui wins for this challenge
-
-1. **Ownership model**: components live in `src/components/ui/`, not `node_modules`. In a take-home, this puts _our_ component code in front of the reviewer instead of an opaque dependency.
-2. **Accessibility baseline**: the Radix primitives underneath handle focus trapping, keyboard navigation, `aria-*` attributes, and dismissal correctly — things we would otherwise spend half the budget rebuilding.
-3. **Stack cohesion**: Tailwind-native styling, no CSS-in-JS runtime, no PostCSS surprises.
-4. **Neutral visuals**: the default tokens are intentionally plain so the craft on display is ours, not the design system's.
-5. **Review-friendly**: any senior frontend reviewer recognises shadcn instantly and can judge how well we compose and extend it without ramp-up.
-
-### The tradeoff we accept
-
-shadcn/ui is **a component library, not a full design system**. It does not ship brand tokens, voice and tone guidance, or designer kits. For this challenge that is the correct level of abstraction — we are demonstrating frontend architecture, not brand systems work. For a real product we would layer our own tokens on top of the CSS variables that shadcn exposes and treat the `ui/` folder as a vendored, patchable dependency.
-
-### How it's used in this repo
-
-- Components added so far: `button`, `card`, `badge`, `checkbox`, `select`, `input`, `label`, `tooltip`, `separator`, `popover`.
-- ESLint and Prettier **skip** `src/components/ui/**` for lint rules that would force us to hand-edit every primitive we pull in (`react-refresh/only-export-components`). The folder is treated as vendored code.
-- Test coverage also excludes this folder.
-
----
-
 ## Testing approach
 
 Three layers, each doing the job it is best at:

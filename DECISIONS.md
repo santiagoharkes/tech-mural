@@ -512,6 +512,52 @@ Playwright's `devices['iPhone 13']` uses webkit. Adding it would mean another do
 
 ---
 
+## Stage 13 — dark mode
+
+Closes the remaining P2 from the audit: two-tracked theming. The chrome (shadcn tokens) already flipped correctly on `<html class="dark">`; the note palette was hard-coded to light Tailwind scales and would have stayed bright against a dark canvas. Now every colour has a `dark:` counterpart and the app respects OS preference by default.
+
+### State boundary (same rule, new inhabitant)
+
+Theme is a **per-browser preference**, not user intent, so it joins view-mode in Zustand + `persist`. The URL stays focused on what is shareable between users viewing the same data (filters, sort, focus). Two teammates on the same `?focus=note_0042` link can legitimately prefer different themes — the URL should never force that.
+
+### Three-way preference: `light` / `dark` / `system`
+
+A binary toggle forces users who prefer OS-following to re-toggle every time the OS flips. The third option, `system`, subscribes to `prefers-color-scheme` and applies whatever the OS currently says; if the OS flips while the app is open (macOS schedule, manual override), `ThemeSync` receives the media-query change event and re-applies the class in place.
+
+Default on first load is `system`. The cycle order chosen for the toggle is `light → dark → system → light` so the first click leaves "I want to pick explicitly" territory and the last click returns to the default.
+
+### Separation of concerns
+
+- **`useThemeStore`** owns the preference. Pure Zustand slice, no DOM.
+- **`<ThemeSync />`** owns the side effect. Reads the preference, applies `.dark` to `<html>`, wires the media-query listener when the preference is `system`. Renders `null`. One job.
+- **`<ThemeToggle />`** owns the UI. Reads the preference, calls `cycleTheme`, renders the current icon, surfaces the next state to assistive tech via `aria-label`.
+
+Three small files with one responsibility each; the store is trivially testable without React, the sync is testable by mounting and checking the `<html>` class, the toggle is testable through its button semantics.
+
+### Why `dark:` variants over CSS custom properties
+
+The audit recommended custom properties (`--note-yellow-surface` with a `.dark` override) — the canonical shadcn pattern. We chose Tailwind `dark:` variants instead:
+
+- Same user-facing result: identical in both modes, flipped by the same `<html class="dark">` selector.
+- One-third the code: six colour × four tokens × two modes = 48 values as CSS vars; the `dark:` variant version stays in `note-colors.ts` where the light palette already lives.
+- Idiomatic Tailwind, no custom-property lookup at runtime.
+
+The trade-off: if we later want runtime-switchable themes (high-contrast mode, per-tenant brand palettes), custom properties unlock that at zero component cost. The current palette does not need it; "next steps" lists the migration as a ~20 min upgrade when the requirement arrives.
+
+### Handling jsdom
+
+`window.matchMedia` is not implemented in jsdom, which would crash `ThemeSync` at component mount. Two defences: the component itself guards on `typeof window.matchMedia === 'function'` (which also covers SSR, non-browser environments), and `src/test/setup.ts` installs a no-op `matchMedia` stub for tests that mount components reading the media query. Either alone would work; both together make the component robust in every target environment without the tests caring.
+
+### Testing
+
+- **Unit**: `store.test.ts` covers default, `setTheme`, `cycleTheme` walking the full cycle, and localStorage persistence.
+- **E2E** (`tests/e2e/theme.spec.ts`, three specs):
+  1. Toggle cycles `system → light → dark → system`, asserting the `data-theme` attribute and the `<html>.dark` class at each step, with `prefers-color-scheme` pinned to `light` via `page.emulateMedia`.
+  2. With `prefers-color-scheme: dark`, the default `system` state already paints the app dark.
+  3. Clicking to `dark` then reloading preserves the choice — proves the `persist` middleware writes through and `ThemeSync` picks it up on mount.
+
+---
+
 ## Time log
 
 - Stage 1 — scaffold, tooling, design system, docs skeleton: _~45 minutes_
@@ -526,3 +572,4 @@ Playwright's `devices['iPhone 13']` uses webkit. Adding it would mean another do
 - Stage 10 — wheel + keyboard zoom, cursor-anchored zoom-to-point, scale-aware culling and centring: _~35 minutes_
 - Stage 11 — docs housekeeping (counts, structure, next steps rewrite): _~10 minutes_
 - Stage 12 — mobile responsive (Sheet sidebar, responsive toolbar + header, touch targets): _~40 minutes_
+- Stage 13 — dark mode (Zustand theme store, ThemeSync to `<html class="dark">`, palette dark variants, cycling toggle): _~35 minutes_

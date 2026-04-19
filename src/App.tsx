@@ -6,10 +6,13 @@ import { MobileFilterSheet } from '@/features/filters/components/mobile-filter-s
 import { NoteBoard } from '@/features/notes/components/note-board'
 import { SortSelect } from '@/features/notes/components/sort-select'
 import { ViewModeToggle } from '@/features/view-mode/components/view-mode-toggle'
+import { ThemeSync } from '@/features/theme/components/theme-sync'
+import { ThemeToggle } from '@/features/theme/components/theme-toggle'
 
 export default function App() {
   return (
     <div className="bg-background text-foreground flex h-screen flex-col">
+      <ThemeSync />
       <SkipToBoard />
       <AppHeader />
       <div className="flex flex-1 overflow-hidden">
@@ -92,14 +95,17 @@ function AppHeader() {
           Explore sticky-note activity across the board
         </p>
       </div>
-      <p
-        className="text-muted-foreground shrink-0 text-xs tabular-nums sm:text-sm"
-        role="status"
-        aria-live="polite"
-        data-testid="board-summary"
-      >
-        {summary}
-      </p>
+      <div className="flex shrink-0 items-center gap-2">
+        <p
+          className="text-muted-foreground text-xs tabular-nums sm:text-sm"
+          role="status"
+          aria-live="polite"
+          data-testid="board-summary"
+        >
+          {summary}
+        </p>
+        <ThemeToggle />
+      </div>
     </header>
   )
 }

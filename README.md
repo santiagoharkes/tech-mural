@@ -30,8 +30,8 @@ First launch may take a few seconds while the MSW service worker registers; afte
 ### Test suite
 
 ```bash
-pnpm test:run               # Vitest unit + integration (85 tests)
-pnpm test:e2e               # Playwright against chromium (15 specs)
+pnpm test:run               # Vitest unit + integration (89 tests)
+pnpm test:e2e               # Playwright against chromium (18 specs)
 pnpm test:coverage          # V8 coverage report in coverage/
 ```
 
@@ -60,6 +60,7 @@ A Husky pre-commit hook runs `lint-staged` (`eslint --fix` + `prettier --write` 
 - **Reveal on board** — every list item has a "Show on board" icon button. Clicking it writes `?focus=<id>` to the URL, flips the view to board, centres the canvas on the target, and flashes a highlight ring for ~2.5 s. Deep-linkable (`/?focus=note_0042` lands already-centred).
 - **Zoom** — mouse wheel zooms anchored to the cursor (no modifier needed on the canvas), keyboard shortcuts are `+` / `-` for step zoom and `0` to reset. Scale is clamped to `[0.3, 3]`.
 - **Responsive** — below `md` the sidebar collapses into a Sheet behind a "Filters" trigger in the toolbar; header subtitle hides; touch targets on filter rows are padded out. Same feature set on a 360 px phone as on 1440 px desktop.
+- **Dark mode** — `light` / `dark` / `system` cycling toggle in the header (Sun / Moon / Monitor). `system` respects `prefers-color-scheme` and auto-updates when the OS flips. Choice is persisted in `localStorage` via Zustand. Note palette adapts across 6 colours with dedicated `dark:` tokens — no bright sticky notes shouting on a dark canvas.
 - **URL state** — filters and sort are synced to the query string via `nuqs`, with typed parsers that reject unknown values. Reload-safe, share-safe.
 - **State branches** — loading skeleton, empty board, error with retry, no-matches-for-filters with a clear action. Each is its own sub-component with its own `data-testid`.
 - **Keyboard-only path** — a skip-to-board link, a focusable region, and arrow-key pan mean the canvas works without a mouse.
@@ -134,6 +135,11 @@ src/
     view-mode/
       store.ts                  # Zustand + persist (localStorage)
       components/view-mode-toggle.tsx
+    theme/
+      store.ts                  # Zustand + persist, light|dark|system
+      components/
+        theme-sync.tsx          # applies .dark class, listens to OS
+        theme-toggle.tsx        # cycling Sun/Moon/Monitor button
     filters/components/mobile-filter-sheet.tsx  # drawer wrapper for < md
   mocks/
     browser.ts                  # MSW service-worker client
@@ -153,6 +159,7 @@ tests/
     reveal.spec.ts              # list → board reveal + deep-link
     zoom.spec.ts                # wheel + keyboard zoom
     mobile.spec.ts              # narrow-viewport sheet + URL sync
+    theme.spec.ts               # light / dark / system cycle + persist
 ```
 
 Every feature co-locates its components, hooks, store slice, API layer, pure helpers, and tests. Lint rules skip `src/components/ui/` because those files are vendored shadcn primitives.
@@ -189,6 +196,7 @@ Accessibility is treated as a first-class test concern — every query is role- 
 | 10    | Wheel + keyboard zoom on the spatial canvas                | ✅     |
 | 11    | Docs housekeeping (counts, structure, next steps)          | ✅     |
 | 12    | Mobile responsive (sheet sidebar, stacked toolbar)         | ✅     |
+| 13    | Dark mode (light / dark / system, persisted, full palette) | ✅     |
 
 Each stage is a single atomic commit (`git log --oneline`).
 

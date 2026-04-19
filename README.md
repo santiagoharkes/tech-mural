@@ -1,63 +1,85 @@
 # Board Activity Explorer
 
-Frontend take-home for exploring activity on a collaborative board. Given a set of sticky notes contributed during a session, the UI lets users visualise them in their spatial context, filter by author and color, sort, and surface recent activity.
+Frontend take-home for Mural. A desktop web app for exploring sticky-note activity on a collaborative board — visualise notes in their spatial context, filter by author and colour, sort by recency / position / author, highlight notes from the last 24 hours, and flip to a list view when you want the grid.
 
-> This repository is being built up in thin, end-to-end vertical slices. Each stage produces a running app, tested and lintable. See `DECISIONS.md` for the architectural rationale behind each choice.
+![Spatial board with filters, sort, and list-view toggle](./docs/screenshots/stage-5-board.png)
 
 ---
+
+## Deliverables
+
+- **Source code** — this repo. Seven atomic commits, one per stage, describing exactly what shipped and why.
+- **[WRITE-UP.md](./WRITE-UP.md)** — the short answers to the brief's questions (approach, assumptions, architecture, perf + a11y, UX, AI usage, tradeoffs, time).
+- **[DECISIONS.md](./DECISIONS.md)** — the long-form stage-by-stage rationale, design-system candidate analysis, audit findings, and memoisation notes.
+- **Screenshots per stage** in [`docs/screenshots/`](./docs/screenshots/).
+
+---
+
+## Quick start
+
+Prereqs: Node `>= 20` and pnpm `>= 9` (`npm install -g pnpm`).
+
+```bash
+pnpm install
+pnpm exec playwright install chromium
+pnpm dev                    # http://localhost:5173
+```
+
+First launch may take a few seconds while the MSW service worker registers; after that every request to `/api/notes` is intercepted and served from a deterministic 200-note fixture.
+
+### Test suite
+
+```bash
+pnpm test:run               # Vitest unit + integration (72 tests)
+pnpm test:e2e               # Playwright against chromium (9 specs)
+pnpm test:coverage          # V8 coverage report in coverage/
+```
+
+`pnpm test` (no `:run`) drops into Vitest's watch mode; `pnpm test:e2e:ui` opens the Playwright trace viewer.
+
+### Lint / format / typecheck
+
+```bash
+pnpm typecheck              # tsc --noEmit via project references
+pnpm lint                   # ESLint flat config
+pnpm format                 # Prettier write (tailwindcss plugin sorts classes)
+pnpm build                  # tsc -b && vite build
+```
+
+A Husky pre-commit hook runs `lint-staged` (`eslint --fix` + `prettier --write` on staged files) so commits land clean.
+
+---
+
+## What's in the box
+
+- **Spatial board** — 200 deterministic notes positioned on a 4000×3000 canvas, pan with mouse drag or keyboard (arrow keys, `Home` to recenter).
+- **Filter by author** (multi-select) and **by colour** (chips with swatches). Per-option counts preview what each filter would reveal.
+- **Sort** — most recent / oldest / author A–Z / position — with stable tie-breakers so results never look random.
+- **"New" badge** on notes under 24 hours old, plus a subtle focus-ring. Window is configurable.
+- **List view toggle** — segmented control (board vs list) persisted in `localStorage` via Zustand. Every filter and sort still applies; filtered notes that were off-screen in the spatial view show up in the grid.
+- **URL state** — filters and sort are synced to the query string via `nuqs`, with typed parsers that reject unknown values. Reload-safe, share-safe.
+- **State branches** — loading skeleton, empty board, error with retry, no-matches-for-filters with a clear action. Each is its own sub-component with its own `data-testid`.
+- **Keyboard-only path** — a skip-to-board link, a focusable region, and arrow-key pan mean the canvas works without a mouse.
+- **Viewport culling** — at the default 1280×720 viewport only ~29 of 200 notes render in the DOM.
+- **Devtools** — React Query devtools mount in dev builds (bottom-left).
 
 ## Stack
 
 | Concern                  | Choice                                                                              |
 | ------------------------ | ----------------------------------------------------------------------------------- |
 | Build                    | [Vite](https://vitejs.dev) + React 19 + TypeScript                                  |
-| Styling                  | [Tailwind CSS v4](https://tailwindcss.com) (CSS-first config)                       |
+| Styling                  | [Tailwind CSS v4](https://tailwindcss.com) (CSS-first config, `@tailwindcss/vite`)  |
 | Components               | [shadcn/ui](https://ui.shadcn.com) (Radix primitives, owned in `src/components/ui`) |
-| Server state             | [TanStack Query](https://tanstack.com/query) _(Stage 2)_                            |
-| Client state             | [Zustand](https://zustand.docs.pmnd.rs) slices _(Stage 4)_                          |
-| URL state                | [nuqs](https://nuqs.47ng.com) _(Stage 4)_                                           |
-| Mock API                 | [MSW](https://mswjs.io) _(Stage 2)_                                                 |
+| Server state             | [TanStack Query](https://tanstack.com/query)                                        |
+| URL state                | [nuqs](https://nuqs.47ng.com) with typed parsers                                    |
+| Client state             | [Zustand](https://zustand.docs.pmnd.rs) with the `persist` middleware               |
+| Mock API                 | [MSW](https://mswjs.io) — the only backend, swappable in one file                   |
 | Unit / integration tests | [Vitest](https://vitest.dev) + [React Testing Library](https://testing-library.com) |
-| End-to-end tests         | [Playwright](https://playwright.dev)                                                |
-| Lint / format            | ESLint (flat config) + Prettier + `prettier-plugin-tailwindcss`                     |
+| End-to-end tests         | [Playwright](https://playwright.dev) (chromium, auto-starts the dev server)         |
+| Lint / format            | ESLint 10 flat config · Prettier · `prettier-plugin-tailwindcss`                    |
 | Git hooks                | Husky + lint-staged                                                                 |
 
-Full rationale in [`DECISIONS.md`](./DECISIONS.md).
-
----
-
-## Getting started
-
-### Prerequisites
-
-- Node.js `>= 20` (LTS)
-- pnpm `>= 9` (`npm install -g pnpm`)
-
-### Install
-
-```bash
-pnpm install
-pnpm exec playwright install chromium
-```
-
-### Common commands
-
-```bash
-pnpm dev           # Vite dev server on http://localhost:5173
-pnpm build         # Type-check + production build to dist/
-pnpm preview       # Preview the production build
-
-pnpm lint          # ESLint
-pnpm format        # Prettier write
-pnpm typecheck     # tsc --noEmit via project references
-
-pnpm test          # Vitest in watch mode
-pnpm test:run      # Vitest single run
-pnpm test:coverage # Vitest with V8 coverage report
-
-pnpm test:e2e      # Playwright (auto-starts dev server)
-pnpm test:e2e:ui   # Playwright UI mode
-```
+Why these specifically: see [`DECISIONS.md`](./DECISIONS.md).
 
 ---
 
@@ -65,45 +87,101 @@ pnpm test:e2e:ui   # Playwright UI mode
 
 ```
 src/
+  App.tsx                       # shell: header + filter sidebar + toolbar + main
+  main.tsx                      # MSW bootstrap, QueryClient + Nuqs providers
+  index.css                     # Tailwind entry + shadcn tokens (light + dark)
   components/
-    ui/              # shadcn/ui primitives (owned, vendored)
+    ui/                         # vendored shadcn/ui primitives
   lib/
-    utils.ts         # cn() helper and other pure utilities
+    query-client.ts             # TanStack Query factory with explorer-tuned defaults
+    relative-time.ts            # Intl.RelativeTimeFormat helper
+    use-element-size.ts         # ResizeObserver hook for viewport culling
+    utils.ts                    # cn() helper
+  features/
+    notes/
+      api/notes-query.ts        # useNotesQuery (fetcher + hook)
+      components/
+        note-board.tsx          # spatial board, state branches, pan, culling
+        note-card.tsx           # sticky on the spatial canvas
+        note-list.tsx           # responsive grid view
+        note-list-item.tsx      # sticky in list mode
+        sort-select.tsx         # URL-bound dropdown
+      hooks/
+        use-board-pan.ts        # pointer + keyboard pan
+        use-board-sort.ts       # nuqs-backed sort state
+      lib/
+        note-colors.ts          # NoteColor → palette classes
+        recency.ts              # isRecentNote
+        sort-notes.ts           # pure sort with stable tie-breakers
+        viewport-culling.ts     # pure isNoteVisible
+      types.ts
+    filters/
+      api/use-board-filters.ts  # nuqs-backed multi-select state
+      components/
+        filter-bar.tsx          # sidebar
+        author-filter.tsx       # fieldset + checkboxes
+        color-filter.tsx        # fieldset + swatches
+        color-dot.tsx
+      lib/
+        filter-counts.ts        # pure aggregation
+        filter-notes.ts         # pure filter
+      types.ts
+    view-mode/
+      store.ts                  # Zustand + persist (localStorage)
+      components/view-mode-toggle.tsx
+  mocks/
+    browser.ts                  # MSW service-worker client
+    server.ts                   # MSW node server (tests)
+    handlers.ts                 # shared handlers
+    data/notes.ts               # Mulberry32-seeded 200-note fixture
   test/
-    setup.ts         # Vitest + RTL global setup
-  App.tsx
-  main.tsx
-  index.css          # Tailwind entry + shadcn tokens
+    setup.ts                    # Vitest + RTL + MSW lifecycle
+    utils.tsx                   # renderWithClient / renderHookWithClient
 
 tests/
-  e2e/               # Playwright specs
+  e2e/
+    smoke.spec.ts
+    filters.spec.ts
+    sort-and-view.spec.ts
+    a11y.spec.ts
 ```
 
-Feature directories (`src/features/notes`, `src/features/filters`, `src/mocks`) are introduced in later stages. Every feature co-locates its components, hooks, store slice, API layer, and tests.
-
----
-
-## Stage plan
-
-| Stage | Deliverable                                       | Status |
-| ----- | ------------------------------------------------- | ------ |
-| 1     | Scaffold, tooling, design system, smoke tests     | ✅     |
-| 2     | Notes domain types, MSW mock, TanStack Query hook | ✅     |
-| 3     | Spatial board view with note component            | ✅     |
-| 4     | Author + color filters, URL-synced state          | ✅     |
-| 5     | Sort options + recent-activity highlighting       | ✅     |
-| 6     | Performance pass (viewport culling, memoisation)  | ✅     |
-| 7     | Accessibility pass                                | ✅     |
-| 8     | Final write-up (decisions, tradeoffs, next steps) | ⏳     |
+Every feature co-locates its components, hooks, store slice, API layer, pure helpers, and tests. Lint rules skip `src/components/ui/` because those files are vendored shadcn primitives.
 
 ---
 
 ## Testing philosophy
 
-Three layers, each doing the job they're best at:
+Three layers, each doing the job it is best at:
 
-- **Unit** — pure functions (sort, filter reducers, date helpers). Fast, deterministic, many of them.
-- **Integration** — components wired to real stores and query clients. Asserts behaviour through the accessible DOM.
-- **End-to-end** — Playwright against the real dev server, one spec per critical user flow (render, filter, sort, reload with URL state).
+| Layer       | Tool                           | What it covers                                                                                        |
+| ----------- | ------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Unit        | Vitest                         | Pure functions (filter, sort, cull geometry, recency, relative-time) and the Zustand slice            |
+| Integration | Vitest + React Testing Library | Components wired to a real `QueryClient` and the nuqs testing adapter, asserted through ARIA roles    |
+| End-to-end  | Playwright (chromium)          | Critical user flows: render, filter + URL reload, clear-all, sort, list view, keyboard pan, skip link |
 
-Shadcn UI primitives live in `src/components/ui/` and are excluded from coverage — they are vendored and covered by the underlying Radix test suites.
+Accessibility is treated as a first-class test concern — every query is role- or label-based, so missing semantics break tests first, humans second.
+
+---
+
+## Stage plan (all complete)
+
+| Stage | Deliverable                                             | Status |
+| ----- | ------------------------------------------------------- | ------ |
+| 1     | Scaffold, tooling, design system, smoke tests           | ✅     |
+| 2     | Notes domain types, MSW mock, TanStack Query hook       | ✅     |
+| 3     | Spatial board view with note component                  | ✅     |
+| 4     | Author + colour filters, URL-synced state               | ✅     |
+| 5     | Sort options + recent-activity highlighting + list view | ✅     |
+| 6     | Performance pass (viewport culling, memoisation)        | ✅     |
+| 7     | Accessibility pass (`impeccable:audit` 14 → 15 / 20)    | ✅     |
+| 8     | Write-up + README polish                                | ✅     |
+
+Each stage is a single atomic commit (`git log --oneline`).
+
+---
+
+## Further reading
+
+- **[`WRITE-UP.md`](./WRITE-UP.md)** — the short write-up answering the brief.
+- **[`DECISIONS.md`](./DECISIONS.md)** — the long version, stage by stage.

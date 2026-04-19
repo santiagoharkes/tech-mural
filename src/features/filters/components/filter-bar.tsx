@@ -8,77 +8,121 @@ import { AuthorFilter } from './author-filter'
 import { ColorFilter } from './color-filter'
 
 /**
- * Inner content of the filter panel. Renders header + AuthorFilter +
- * ColorFilter. Extracted from `FilterBar` so the mobile Sheet can reuse the
- * exact same UI without re-implementing the layout.
+ * Hook + derivation used by both the desktop sidebar and the mobile sheet.
+ * Kept cache-cheap: `useNotesQuery` dedupes with the other consumers so this
+ * does not cost a second network request.
  */
-export function FilterBarContent() {
+function useFilterBarModel() {
   const { data, isPending } = useNotesQuery()
-  const { filters, toggleAuthor, toggleColor, clear, activeCount } = useBoardFilters()
+  const state = useBoardFilters()
 
-  const { authors, counts } = useMemo(() => {
+  const model = useMemo(() => {
     if (!data) return { authors: [], counts: computeFilterCounts([]) }
-    return {
-      authors: data.authors,
-      counts: computeFilterCounts(data.notes),
-    }
+    return { authors: data.authors, counts: computeFilterCounts(data.notes) }
   }, [data])
 
+  return { ...state, ...model, isPending }
+}
+
+interface ClearFiltersButtonProps {
+  activeCount: number
+  onClear: () => void
+}
+
+function ClearFiltersButton({ activeCount, onClear }: ClearFiltersButtonProps) {
   return (
-    <div className="flex h-full flex-col gap-4">
-      <header className="flex items-center justify-between">
-        <h2 className="text-base font-semibold tracking-tight">Filters</h2>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={clear}
-          disabled={activeCount === 0}
-          data-testid="clear-filters"
-          aria-label={activeCount ? `Clear ${activeCount} active filters` : 'Clear filters'}
-        >
-          Clear{activeCount > 0 ? ` (${activeCount})` : ''}
-        </Button>
-      </header>
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={onClear}
+      disabled={activeCount === 0}
+      data-testid="clear-filters"
+      aria-label={activeCount ? `Clear ${activeCount} active filters` : 'Clear filters'}
+    >
+      Clear{activeCount > 0 ? ` (${activeCount})` : ''}
+    </Button>
+  )
+}
 
+interface FilterGroupsProps {
+  model: ReturnType<typeof useFilterBarModel>
+}
+
+/** Author + Color filter lists, shared between the sidebar and the sheet. */
+function FilterGroups({ model }: FilterGroupsProps) {
+  if (model.isPending) {
+    return (
+      <p className="text-muted-foreground text-sm" role="status">
+        Loading filters…
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      <AuthorFilter
+        authors={model.authors}
+        selected={model.filters.authors}
+        counts={model.counts.byAuthor}
+        onToggle={model.toggleAuthor}
+      />
       <Separator />
-
-      {isPending ? (
-        <p className="text-muted-foreground text-sm" role="status">
-          Loading filters…
-        </p>
-      ) : (
-        <div className="space-y-5 overflow-y-auto">
-          <AuthorFilter
-            authors={authors}
-            selected={filters.authors}
-            counts={counts.byAuthor}
-            onToggle={toggleAuthor}
-          />
-          <Separator />
-          <ColorFilter selected={filters.colors} counts={counts.byColor} onToggle={toggleColor} />
-        </div>
-      )}
+      <ColorFilter
+        selected={model.filters.colors}
+        counts={model.counts.byColor}
+        onToggle={model.toggleColor}
+      />
     </div>
   )
 }
 
 /**
- * Desktop sidebar filter panel. Hidden on narrow viewports; the mobile
- * `MobileFilterSheet` takes over below the `md` breakpoint.
+ * Content of the mobile filter sheet. Reserves right-side padding on the
+ * header so the Clear button never sits underneath Radix Dialog's built-in
+ * close (×) affordance at `top-4 right-4`.
+ */
+export function FilterBarContent() {
+  const model = useFilterBarModel()
+  return (
+    <div className="flex h-full flex-col gap-4">
+      <header className="flex items-center justify-between pr-8">
+        <h2 className="text-base font-semibold tracking-tight">Filters</h2>
+        <ClearFiltersButton activeCount={model.activeCount} onClear={model.clear} />
+      </header>
+      <Separator />
+      <div className="overflow-y-auto">
+        <FilterGroups model={model} />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Desktop sidebar. Hidden on narrow viewports; the mobile `MobileFilterSheet`
+ * takes over below the `md` breakpoint.
  *
- * Subscribes to the full notes dataset to derive counts for every filter
- * option. Kept cache-cheap: `useNotesQuery` dedupes with the other consumers
- * so this does not cost a second network request.
+ * Layout pinned so the header aligns with `<BoardToolbar />` — both sit on the
+ * same 56 px row directly under `<AppHeader />`, sharing a bottom border.
  */
 export function FilterBar() {
+  const model = useFilterBarModel()
   return (
     <aside
       aria-label="Filters"
       data-testid="filter-bar"
-      className="border-border/70 bg-background hidden w-72 shrink-0 flex-col border-r p-5 md:flex"
+      className="border-border/70 bg-background hidden w-72 shrink-0 flex-col border-r md:flex"
     >
-      <FilterBarContent />
+      <header
+        data-testid="filter-bar-header"
+        className="border-border/70 flex h-14 shrink-0 items-center justify-between border-b px-5"
+      >
+        <h2 className="text-base font-semibold tracking-tight">Filters</h2>
+        <ClearFiltersButton activeCount={model.activeCount} onClear={model.clear} />
+      </header>
+      <div className="overflow-y-auto p-5">
+        <FilterGroups model={model} />
+      </div>
     </aside>
   )
 }

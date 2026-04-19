@@ -118,7 +118,7 @@ function AppHeader() {
 function BoardToolbar() {
   return (
     <div
-      className="border-border/70 bg-background/60 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2"
+      className="border-border/70 bg-background/60 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2 md:h-14 md:flex-nowrap md:py-0"
       data-testid="board-toolbar"
     >
       <div className="flex items-center gap-3">

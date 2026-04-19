@@ -230,4 +230,15 @@
   html {
     @apply font-sans;
   }
+  /* Interactive elements should signal interactivity on desktop. shadcn
+     intentionally omits this from the Button base styles, so we promote it
+     at the global level and honour `disabled` + `aria-disabled`. */
+  button:not(:disabled):not([aria-disabled='true']),
+  [role='button']:not([aria-disabled='true']),
+  [role='radio']:not([aria-disabled='true']),
+  [role='checkbox']:not([aria-disabled='true']),
+  a[href],
+  summary {
+    @apply cursor-pointer;
+  }
 }

@@ -33,9 +33,9 @@ function NoteCardImpl({ note, authorName, now }: NoteCardProps) {
       data-no-pan
       tabIndex={0}
       className={cn(
-        'absolute w-44 rounded-md border p-3 shadow-sm transition-transform',
+        'absolute w-44 rounded-md border p-3 shadow-sm motion-safe:transition-transform',
         'focus-visible:ring-ring/60 focus-visible:ring-2 focus-visible:outline-none',
-        'hover:-translate-y-0.5 hover:shadow-md',
+        'hover:shadow-md motion-safe:hover:-translate-y-0.5',
         noteColorClasses(color),
         recent && 'ring-ring/40 ring-2 ring-offset-1',
       )}

@@ -9,17 +9,40 @@ import { ViewModeToggle } from '@/features/view-mode/components/view-mode-toggle
 export default function App() {
   return (
     <div className="bg-background text-foreground flex h-screen flex-col">
+      <SkipToBoard />
       <AppHeader />
       <div className="flex flex-1 overflow-hidden">
         <FilterBar />
         <div className="flex flex-1 flex-col overflow-hidden">
           <BoardToolbar />
-          <main aria-label="Board canvas" className="flex-1 overflow-hidden">
+          <main
+            id="board-canvas"
+            aria-label="Board canvas"
+            tabIndex={-1}
+            className="flex-1 overflow-hidden focus:outline-none"
+          >
             <NoteBoard />
           </main>
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * Keyboard-only users hit ~20 stops (header, filter sidebar, toolbar) before
+ * reaching the first note. A visually-hidden skip link that reveals on focus
+ * lets them jump straight to the board canvas — WCAG 2.4.1 Bypass Blocks.
+ */
+function SkipToBoard() {
+  return (
+    <a
+      href="#board-canvas"
+      data-testid="skip-to-board"
+      className="focus-visible:bg-background focus-visible:text-foreground sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-50 focus-visible:rounded-md focus-visible:border focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:shadow focus-visible:outline-none"
+    >
+      Skip to board
+    </a>
   )
 }
 

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo, type KeyboardEvent } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useElementSize } from '@/lib/use-element-size'
@@ -47,6 +47,9 @@ export function NoteBoard() {
   return <SpatialBoard notes={processed} authorMap={query.data.authorMap} />
 }
 
+/** Keyboard pan distance per arrow-key press, in CSS pixels. */
+const KEYBOARD_PAN_STEP = 80
+
 function SpatialBoard({
   notes,
   authorMap,
@@ -54,7 +57,7 @@ function SpatialBoard({
   notes: readonly Note[]
   authorMap: ReadonlyMap<string, string>
 }) {
-  const { offset, bind, isPanning } = useBoardPan()
+  const { offset, bind, isPanning, panBy, reset } = useBoardPan()
   const [containerRef, size] = useElementSize<HTMLElement>()
 
   // Viewport culling. We fall back to rendering everything until the
@@ -65,18 +68,54 @@ function SpatialBoard({
     return notes.filter((note) => isNoteVisible(note, offset, size))
   }, [notes, offset, size])
 
+  /**
+   * Keyboard pan. Arrow keys pan the canvas by a fixed step; `Home` recenters.
+   * Bound to the `<section>` itself so it only fires when the canvas region
+   * has keyboard focus — tab-stopping into a note card preserves its own key
+   * semantics (Enter / Space).
+   */
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLElement>) => {
+      switch (event.key) {
+        case 'ArrowLeft':
+          panBy(KEYBOARD_PAN_STEP, 0)
+          break
+        case 'ArrowRight':
+          panBy(-KEYBOARD_PAN_STEP, 0)
+          break
+        case 'ArrowUp':
+          panBy(0, KEYBOARD_PAN_STEP)
+          break
+        case 'ArrowDown':
+          panBy(0, -KEYBOARD_PAN_STEP)
+          break
+        case 'Home':
+          reset()
+          break
+        default:
+          return
+      }
+      event.preventDefault()
+    },
+    [panBy, reset],
+  )
+
   return (
     <section
       ref={containerRef}
       role="region"
-      aria-label={`Board canvas, ${notes.length} notes`}
+      aria-label={`Board canvas, ${notes.length} notes. Use arrow keys to pan, Home to recenter.`}
+      aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home"
+      tabIndex={0}
       data-testid="note-board"
       data-total-notes={notes.length}
       data-visible-notes={visibleNotes.length}
       className={cn(
         'bg-muted/30 relative h-full w-full touch-none overflow-hidden select-none',
+        'focus-visible:ring-ring/60 focus-visible:ring-2 focus-visible:outline-none',
         isPanning ? 'cursor-grabbing' : 'cursor-grab',
       )}
+      onKeyDown={handleKeyDown}
       {...bind}
     >
       <div
@@ -138,7 +177,7 @@ function BoardSkeleton() {
       {placeholders.map((p) => (
         <div
           key={p.id}
-          className="bg-muted absolute h-24 w-44 animate-pulse rounded-md shadow-sm"
+          className="bg-muted absolute h-24 w-44 rounded-md shadow-sm motion-safe:animate-pulse"
           style={{
             left: `${p.left}px`,
             top: `${p.top}px`,

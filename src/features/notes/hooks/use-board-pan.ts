@@ -11,7 +11,10 @@ export interface UseBoardPanReturn {
   bind: {
     onPointerDown: (event: PointerEvent<HTMLElement>) => void
   }
+  /** Reset the pan to its initial offset. Used by the keyboard "Home" shortcut. */
   reset: () => void
+  /** Increment the current offset by a delta. Used by arrow-key pan. */
+  panBy: (dx: number, dy: number) => void
 }
 
 const NO_PAN_SELECTOR = '[data-no-pan]'
@@ -86,10 +89,15 @@ export function useBoardPan(initial: Offset = { x: 0, y: 0 }): UseBoardPanReturn
 
   const reset = useCallback(() => setOffset(initial), [initial])
 
+  const panBy = useCallback((dx: number, dy: number) => {
+    setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
+  }, [])
+
   return {
     offset,
     isPanning,
     bind: { onPointerDown },
     reset,
+    panBy,
   }
 }

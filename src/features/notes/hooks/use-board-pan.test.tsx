@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useBoardPan } from './use-board-pan'
 
 function Panel({ children }: { children?: React.ReactNode }) {
-  const { offset, bind, isPanning } = useBoardPan()
+  const { offset, bind, isPanning, panBy, reset } = useBoardPan()
   return (
     <div
       data-testid="panel"
@@ -12,6 +12,15 @@ function Panel({ children }: { children?: React.ReactNode }) {
       style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
       {...bind}
     >
+      <button data-testid="pan-right" onClick={() => panBy(-20, 0)}>
+        right
+      </button>
+      <button data-testid="pan-down" onClick={() => panBy(0, -15)}>
+        down
+      </button>
+      <button data-testid="reset" onClick={reset}>
+        reset
+      </button>
       {children}
     </div>
   )
@@ -61,6 +70,28 @@ describe('useBoardPan', () => {
       clientY: 0,
     })
     expect(screen.getByTestId('panel').dataset.panning).toBe('false')
+  })
+
+  it('panBy increments the offset by the given delta', () => {
+    render(<Panel />)
+    const panel = screen.getByTestId('panel')
+
+    fireEvent.click(screen.getByTestId('pan-right'))
+    expect(panel.dataset.offset).toBe('-20,0')
+
+    fireEvent.click(screen.getByTestId('pan-down'))
+    expect(panel.dataset.offset).toBe('-20,-15')
+  })
+
+  it('reset returns the offset to its initial value', () => {
+    render(<Panel />)
+    const panel = screen.getByTestId('panel')
+
+    fireEvent.click(screen.getByTestId('pan-right'))
+    expect(panel.dataset.offset).toBe('-20,0')
+
+    fireEvent.click(screen.getByTestId('reset'))
+    expect(panel.dataset.offset).toBe('0,0')
   })
 
   it('preserves the previous offset across successive drags', () => {

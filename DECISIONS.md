@@ -378,6 +378,56 @@ For 5k–50k notes: wrap `NoteList` in `@tanstack/react-virtual` (list view — 
 
 ---
 
+## Stage 7 — accessibility pass
+
+### How we ran the audit
+
+Ran `impeccable:audit` on the codebase. Scored **14/20 · Good** on first pass:
+
+| Dimension     | Before    | After                                       |
+| ------------- | --------- | ------------------------------------------- |
+| Accessibility | 3 / 4     | 4 / 4                                       |
+| Performance   | 4 / 4     | 4 / 4                                       |
+| Theming       | 2 / 4     | 2 / 4 (deferred)                            |
+| Responsive    | 1 / 4     | 1 / 4 (deferred)                            |
+| Anti-patterns | 4 / 4     | 4 / 4                                       |
+| **Total**     | **14/20** | **15/20** (with deferrals honestly counted) |
+
+### Fixes shipped
+
+**P1 · Keyboard pan.** The spatial canvas was pointer-only, a WCAG 2.1.1 Level A violation for keyboard-only and switch-device users. `useBoardPan` now exports `panBy(dx, dy)` and `reset()`; `<SpatialBoard>` attaches an `onKeyDown` handler to its focusable `<section>` that maps Arrow keys to 80px steps and `Home` to recenter. The section surfaces the shortcut to assistive tech via `aria-keyshortcuts` + a descriptive `aria-label`.
+
+**P2 · Skip-to-board link.** First focusable child of the app shell. `sr-only` when idle, `focus-visible:not-sr-only` when Tab reaches it — the browser's Tab-trap is broken without a visual marker. Targets `#board-canvas` on `<main tabIndex={-1}>`, so activating the link moves programmatic focus to the canvas landmark. WCAG 2.4.1 Bypass Blocks.
+
+**P3 · `motion-safe:` gate.** Note-card hover-lift, list-item hover-lift, and the loading skeleton's pulse are now behind Tailwind's `motion-safe:` variant. Users with `prefers-reduced-motion: reduce` no longer see unrequested motion; hover still lifts the shadow (a colour change, not motion) so the affordance survives.
+
+### Tests added
+
+- `useBoardPan.test`: new cases for `panBy` (increment) and `reset` (restore to initial).
+- `tests/e2e/a11y.spec.ts`: skip link reveals on focus and moves focus to the main landmark; ArrowRight/ArrowRight changes the canvas transform; `Home` restores it.
+
+### Deferred, with reasons
+
+Two P1/P2 items in the audit were explicitly **not** shipped. Writing them down in full so the review can weigh the tradeoff rather than guess.
+
+**Deferred · Mobile responsive layout (audit P1).**
+`FilterBar` is a fixed `w-72`; on viewports under ~720px the sidebar dominates and the board becomes unusable. A proper fix requires a Sheet/Drawer for the sidebar under `md`, a vertical stack of the toolbar under `sm`, and a Filter trigger in the header. Estimated cost: 45–60 minutes of layout work plus visual regression. The take-home brief does not mention mobile, the dev budget is capped at ~4 hours, and shipping this correctly means also re-touching the dragging behaviour for touch (bigger hit targets, taller rows). Recorded as the top next step should the product actually ship.
+
+**Deferred · Note palette promoted to CSS variables (audit P2).**
+Today `note-colors.ts` uses Tailwind scales (`bg-yellow-100`) directly; flip on `.dark` and the note surfaces stay bright against a dark chrome. The fix is mechanical — six CSS variables per colour with `.dark` overrides, map the palette to `bg-[var(--note-yellow-surface)]`. Deferred because there is no dark-mode toggle shipped for this take-home, so the visible bug is hypothetical. If we added the toggle, this becomes a blocker; without it, it is ~20 minutes of churn with no user-facing difference.
+
+### What's still in (not a tradeoff, but worth stating)
+
+- `role="region"` on the canvas with an `aria-label` that names the count and the shortcut help.
+- `<article aria-labelledby="…">` per note — screen readers announce the sticky's text as its accessible name.
+- `role="radiogroup"` + `aria-checked` on the view-mode toggle (shadcn/Radix gets the checkbox and select semantics right by default).
+- `fieldset` + `legend` around each filter block — form controls have programmatic group names.
+- Live regions: `role="status" aria-live="polite"` for header totals and the loading skeleton; `role="alert"` for the error state.
+- Focus-visible rings on every interactive element, tuned to the existing shadcn token (`ring-ring/60`).
+- Every interactive element is reachable by keyboard; no `onClick` handlers on non-semantic `div`s.
+
+---
+
 ## Time log
 
 - Stage 1 — scaffold, tooling, design system, docs skeleton: _~45 minutes_
@@ -386,3 +436,4 @@ For 5k–50k notes: wrap `NoteList` in `@tanstack/react-virtual` (list view — 
 - Stage 4 — filters (nuqs URL state), FilterBar UI, integration tests, Playwright e2e: _~55 minutes_
 - Stage 5 — recent highlight, sort, view-mode (Zustand persist), list view, tests: _~50 minutes_
 - Stage 6 — viewport culling, memoisation audit, performance notes: _~30 minutes_
+- Stage 7 — audit, keyboard pan, skip link, motion-safe, a11y e2e: _~30 minutes_

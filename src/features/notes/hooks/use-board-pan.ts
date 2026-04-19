@@ -5,37 +5,62 @@ export interface Offset {
   y: number
 }
 
+export interface Transform {
+  x: number
+  y: number
+  scale: number
+}
+
+export const MIN_SCALE = 0.3
+export const MAX_SCALE = 3
+export const DEFAULT_SCALE = 1
+
 export interface UseBoardPanReturn {
   offset: Offset
+  scale: number
   isPanning: boolean
   bind: {
     onPointerDown: (event: PointerEvent<HTMLElement>) => void
   }
-  /** Reset the pan to its initial offset. Used by the keyboard "Home" shortcut. */
+  /** Reset pan (and scale) to the initial state. */
   reset: () => void
-  /** Increment the current offset by a delta. Used by arrow-key pan. */
+  /** Increment the current offset by a delta in screen pixels. */
   panBy: (dx: number, dy: number) => void
   /** Replace the offset outright. Used to centre the canvas on a specific note. */
   setOffset: (offset: Offset) => void
+  /**
+   * Multiplicative zoom. If `center` is provided (screen coords relative to
+   * the board container), the point under that cursor stays fixed — the
+   * canonical "zoom to cursor" behaviour of Figma, Miro, etc. Clamped to
+   * `[MIN_SCALE, MAX_SCALE]`.
+   */
+  zoomBy: (factor: number, center?: Offset) => void
+  /** Restore zoom to `1` while keeping the current pan. */
+  resetZoom: () => void
 }
 
 const NO_PAN_SELECTOR = '[data-no-pan]'
 
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
+
 /**
- * Pointer-driven pan for a spatial canvas.
+ * Combined pan + zoom state for the spatial canvas.
  *
- * Design notes:
- * - The start of a drag snapshots the current offset as an "origin" in a ref.
- *   Every subsequent move updates state relative to that snapshot so the
- *   handler never reads stale React state.
- * - While dragging, `pointermove` / `pointerup` are attached to `window`. That
- *   captures the pointer even if it leaves the element — no need for
- *   `setPointerCapture` (which jsdom does not implement).
- * - Elements with `data-no-pan` (note cards, toolbars) short-circuit the pan so
- *   clicks and focus still work through them.
+ * The transform is `translate(offset) * scale(scale)` — pan values are in
+ * screen-space pixels, scale is a multiplier. Pointer drag updates `offset`;
+ * mouse-wheel updates `scale` around the cursor; keyboard pans by a fixed
+ * screen-space step regardless of zoom, which matches user intuition on a
+ * canvas ("ArrowRight moves the view right by the same amount no matter how
+ * zoomed in I am").
+ *
+ * `window`-level pointer listeners during drag keep the pan alive even when
+ * the cursor leaves the element — we do not rely on `setPointerCapture`
+ * (jsdom does not implement it) so the whole surface is unit-testable.
  */
-export function useBoardPan(initial: Offset = { x: 0, y: 0 }): UseBoardPanReturn {
-  const [offset, setOffset] = useState<Offset>(initial)
+export function useBoardPan(
+  initial: Transform = { x: 0, y: 0, scale: DEFAULT_SCALE },
+): UseBoardPanReturn {
+  const [transform, setTransform] = useState<Transform>(initial)
   const [isPanning, setIsPanning] = useState(false)
   const dragOrigin = useRef<{
     startX: number
@@ -53,12 +78,12 @@ export function useBoardPan(initial: Offset = { x: 0, y: 0 }): UseBoardPanReturn
       dragOrigin.current = {
         startX: event.clientX,
         startY: event.clientY,
-        originX: offset.x,
-        originY: offset.y,
+        originX: transform.x,
+        originY: transform.y,
       }
       setIsPanning(true)
     },
-    [offset.x, offset.y],
+    [transform.x, transform.y],
   )
 
   useEffect(() => {
@@ -67,10 +92,11 @@ export function useBoardPan(initial: Offset = { x: 0, y: 0 }): UseBoardPanReturn
     const handleMove = (event: globalThis.PointerEvent) => {
       const origin = dragOrigin.current
       if (!origin) return
-      setOffset({
+      setTransform((prev) => ({
+        ...prev,
         x: origin.originX + (event.clientX - origin.startX),
         y: origin.originY + (event.clientY - origin.startY),
-      })
+      }))
     }
 
     const handleEnd = () => {
@@ -89,22 +115,46 @@ export function useBoardPan(initial: Offset = { x: 0, y: 0 }): UseBoardPanReturn
     }
   }, [isPanning])
 
-  const reset = useCallback(() => setOffset(initial), [initial])
+  const reset = useCallback(() => setTransform(initial), [initial])
 
   const panBy = useCallback((dx: number, dy: number) => {
-    setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
+    setTransform((prev) => ({ ...prev, x: prev.x + dx, y: prev.y + dy }))
   }, [])
 
   const setOffsetTo = useCallback((next: Offset) => {
-    setOffset(next)
+    setTransform((prev) => ({ ...prev, x: next.x, y: next.y }))
+  }, [])
+
+  const zoomBy = useCallback((factor: number, center?: Offset) => {
+    setTransform((prev) => {
+      const nextScale = clamp(prev.scale * factor, MIN_SCALE, MAX_SCALE)
+      if (nextScale === prev.scale) return prev
+      if (!center) return { ...prev, scale: nextScale }
+      // Zoom around a screen-space point. The canvas-space point under the
+      // cursor before the zoom should still be under the cursor after.
+      const canvasX = (center.x - prev.x) / prev.scale
+      const canvasY = (center.y - prev.y) / prev.scale
+      return {
+        x: center.x - canvasX * nextScale,
+        y: center.y - canvasY * nextScale,
+        scale: nextScale,
+      }
+    })
+  }, [])
+
+  const resetZoom = useCallback(() => {
+    setTransform((prev) => ({ ...prev, scale: DEFAULT_SCALE }))
   }, [])
 
   return {
-    offset,
+    offset: { x: transform.x, y: transform.y },
+    scale: transform.scale,
     isPanning,
     bind: { onPointerDown },
     reset,
     panBy,
     setOffset: setOffsetTo,
+    zoomBy,
+    resetZoom,
   }
 }

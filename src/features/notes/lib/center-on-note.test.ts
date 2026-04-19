@@ -20,4 +20,13 @@ describe('centerOnNote', () => {
     expect(note.x + NOTE_CARD_WIDTH / 2 + offset.x).toBe(viewport.width / 2)
     expect(note.y + NOTE_CARD_HEIGHT / 2 + offset.y).toBe(viewport.height / 2)
   })
+
+  it('centres correctly at non-unit scale', () => {
+    const viewport = { width: 1000, height: 600 }
+    const note = { x: 800, y: 400 }
+    const scale = 1.5
+    const offset = centerOnNote(note, viewport, scale)
+    expect((note.x + NOTE_CARD_WIDTH / 2) * scale + offset.x).toBe(viewport.width / 2)
+    expect((note.y + NOTE_CARD_HEIGHT / 2) * scale + offset.y).toBe(viewport.height / 2)
+  })
 })

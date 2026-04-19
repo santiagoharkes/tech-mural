@@ -13,17 +13,23 @@ export interface Offset {
 
 /**
  * Compute the pan offset that places a note's centre at the centre of the
- * visible viewport.
+ * visible viewport, at the given scale.
  *
- * The canvas is laid out in "canvas space"; the visible layer is translated by
- * `offset`. A note at canvas `(x, y)` is visually at `(x + offset.x, y + offset.y)`.
- * We solve for `offset` such that the note's centre aligns with the viewport's
- * centre — standard centre-on-point math, extracted into a pure function so
- * the test does not care about React.
+ * Canvas transform is `translate(offset) scale(scale)`. Solving for offset
+ * such that the note's centre lands at the viewport's centre:
+ *
+ *   (note.x + W/2) * scale + offset.x = viewport.width / 2
+ *
+ * At scale=1 this reduces to the simple centring math the reveal-on-board
+ * feature started with.
  */
-export function centerOnNote(note: Pick<Note, 'x' | 'y'>, viewport: Viewport): Offset {
+export function centerOnNote(
+  note: Pick<Note, 'x' | 'y'>,
+  viewport: Viewport,
+  scale: number = 1,
+): Offset {
   return {
-    x: viewport.width / 2 - (note.x + NOTE_CARD_WIDTH / 2),
-    y: viewport.height / 2 - (note.y + NOTE_CARD_HEIGHT / 2),
+    x: viewport.width / 2 - (note.x + NOTE_CARD_WIDTH / 2) * scale,
+    y: viewport.height / 2 - (note.y + NOTE_CARD_HEIGHT / 2) * scale,
   }
 }

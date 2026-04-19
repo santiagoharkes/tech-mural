@@ -465,6 +465,53 @@ A whole-card click would steal the default "focus to read" affordance — screen
 
 ---
 
+## Stage 10 — wheel + keyboard zoom
+
+### Shape of the change
+
+`useBoardPan` now owns `scale` alongside `offset`. One state object (`Transform = { x, y, scale }`), one set of setters (`panBy`, `setOffset`, `zoomBy`, `resetZoom`, `reset`). The hook name stays — pan-and-zoom is still "viewport transform", and renaming would churn every consumer for no gain.
+
+### Zoom-to-cursor math
+
+```
+canvasPoint = (cursor - offset) / prevScale
+newOffset   = cursor - canvasPoint * nextScale
+```
+
+That keeps the canvas point under the pointer fixed through the zoom — the Figma / Miro feel. Pure, tested, no stale state (we use the setState updater).
+
+### Why `{ passive: false }` on the wheel listener
+
+React attaches `onWheel` as a passive event by default, so `event.preventDefault()` inside the handler is silently a no-op and the page would scroll. We subscribe natively from a `useEffect` with `{ passive: false }` so `preventDefault` actually prevents, and the cleanup unsubscribes on unmount.
+
+### Scale-aware culling and centring
+
+Both pure functions now take an optional `scale` parameter. The derivations:
+
+- `isNoteVisible` — the viewport in canvas space becomes `[-offset.x / scale, (width - offset.x) / scale]`. Padding, expressed in screen pixels, is divided by `scale` too: the further you zoom out, the more canvas the buffer covers. At `scale = 1` everything reduces to the Stage 6 formula.
+- `centerOnNote` — `viewport/2 - (note + W/2) * scale` instead of `viewport/2 - (note + W/2)`. Centring at non-unit zoom is one multiply away.
+
+Both signatures default `scale = 1`, so every existing call site stays green without edits.
+
+### Keyboard shortcuts
+
+`+` / `=` zoom in, `-` / `_` zoom out by a factor of 1.25, `0` resets to 100 %. Surfaced to assistive tech via `aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home + - 0"` and the `aria-label` spells them out ("Arrow keys pan, Home recenters, + and − zoom, 0 resets zoom.").
+
+### Tests added
+
+- `useBoardPan.test`: `zoomBy` without centre (pure multiply), `zoomBy` around a cursor point (offset verifies the anchor-preservation math), clamp behaviour at the MAX boundary, `resetZoom` preserves pan.
+- `viewport-culling.test`: two scale cases (zoom-out reveals, zoom-in hides).
+- `center-on-note.test`: non-unit-scale case verifying `(note + W/2) * scale + offset = viewport/2`.
+- `tests/e2e/zoom.spec.ts`: keyboard `+` / `-` / `0` mutates `data-scale`; wheel zoom around a cursor anchor increases the matrix scaleX above 1.
+
+### What's not in
+
+- **Animated zoom transitions.** The `translate + scale` update lands instantly. Tweening would look nicer, but `requestAnimationFrame` scheduling on every wheel event is its own rabbit hole and the exercise does not earn it back.
+- **Pinch-zoom on touch.** The pan hook already bails on `event.button !== 0`; touch pinch would need a two-pointer handler. Out of scope.
+- **Visible zoom indicator.** We expose `data-scale` for tests and assistive tech; a small "(125 %)" chip in the corner would be a polish pass.
+
+---
+
 ## Time log
 
 - Stage 1 — scaffold, tooling, design system, docs skeleton: _~45 minutes_
@@ -476,3 +523,4 @@ A whole-card click would steal the default "focus to read" affordance — screen
 - Stage 7 — audit, keyboard pan, skip link, motion-safe, a11y e2e: _~30 minutes_
 - Stage 8 — write-up + README polish: _~20 minutes_
 - Stage 9 — list → board reveal with deep-linkable `?focus=` + highlight ring: _~40 minutes_
+- Stage 10 — wheel + keyboard zoom, cursor-anchored zoom-to-point, scale-aware culling and centring: _~35 minutes_

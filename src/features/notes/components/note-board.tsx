@@ -70,6 +70,18 @@ const KEYBOARD_PAN_STEP = 80
 /** How long the reveal highlight ring stays on before fading. */
 const HIGHLIGHT_DURATION_MS = 2500
 
+/** Multiplicative zoom step per keypress (`+` / `-`). */
+const KEYBOARD_ZOOM_STEP = 1.25
+
+/**
+ * Exponential decay from the wheel's deltaY into a zoom factor. Tuned to feel
+ * smooth on both mouse wheels (one notch ≈ 53 px deltaY) and trackpad pinch
+ * (continuous small deltas). Math.exp(-deltaY * 0.0015):
+ *   notch down (53)  → 0.924 (zoom out)
+ *   notch up  (-53)  → 1.082 (zoom in)
+ */
+const WHEEL_ZOOM_SENSITIVITY = 0.0015
+
 function SpatialBoard({
   notes,
   authorMap,
@@ -77,7 +89,8 @@ function SpatialBoard({
   notes: readonly Note[]
   authorMap: ReadonlyMap<string, string>
 }) {
-  const { offset, bind, isPanning, panBy, reset, setOffset } = useBoardPan()
+  const { offset, scale, bind, isPanning, panBy, reset, setOffset, zoomBy, resetZoom } =
+    useBoardPan()
   const { focus } = useBoardFocus()
   const [containerRef, size] = useElementSize<HTMLElement>()
   const [highlightId, setHighlightId] = useState<NoteId | null>(null)
@@ -95,14 +108,14 @@ function SpatialBoard({
     if (centeredFor.current === focus) return
     const note = notes.find((n) => n.id === focus)
     if (!note) return
-    setOffset(centerOnNote(note, size))
+    setOffset(centerOnNote(note, size, scale))
     centeredFor.current = focus
     // Intentional: this syncs a transient visual effect to URL + measured size.
     // Neither `offset` nor `highlightId` are in this effect's deps, so there is
     // no cascade. The rule is overly cautious for this synchronisation pattern.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHighlightId(focus)
-  }, [focus, notes, size, setOffset])
+  }, [focus, notes, size, scale, setOffset])
 
   /** Let the highlight fade itself. Ring class transitions via CSS. */
   useEffect(() => {
@@ -116,8 +129,8 @@ function SpatialBoard({
   // environments) — a one-time 200-card paint is cheaper than a wrong cull.
   const visibleNotes = useMemo(() => {
     if (size.width === 0 || size.height === 0) return notes
-    return notes.filter((note) => isNoteVisible(note, offset, size))
-  }, [notes, offset, size])
+    return notes.filter((note) => isNoteVisible(note, offset, size, scale))
+  }, [notes, offset, size, scale])
 
   /**
    * Keyboard pan. Arrow keys pan the canvas by a fixed step; `Home` recenters.
@@ -143,24 +156,62 @@ function SpatialBoard({
         case 'Home':
           reset()
           break
+        case '+':
+        case '=':
+          zoomBy(KEYBOARD_ZOOM_STEP)
+          break
+        case '-':
+        case '_':
+          zoomBy(1 / KEYBOARD_ZOOM_STEP)
+          break
+        case '0':
+          resetZoom()
+          break
         default:
           return
       }
       event.preventDefault()
     },
-    [panBy, reset],
+    [panBy, reset, zoomBy, resetZoom],
   )
+
+  /**
+   * Wheel zoom. Canvas-style: the wheel always zooms (no modifier needed),
+   * since the surface is not scrollable in the traditional sense. We pull
+   * the cursor position out of the event so the zoom is anchored to the
+   * point under the pointer.
+   *
+   * React attaches `onWheel` as a passive listener by default, so
+   * `preventDefault()` on the synthetic event is a no-op — the page would
+   * still scroll. We therefore subscribe natively with `{ passive: false }`.
+   */
+  useEffect(() => {
+    const element = containerRef.current
+    if (!element) return
+
+    const onWheel = (event: globalThis.WheelEvent) => {
+      event.preventDefault()
+      const rect = element.getBoundingClientRect()
+      const center = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+      const factor = Math.exp(-event.deltaY * WHEEL_ZOOM_SENSITIVITY)
+      zoomBy(factor, center)
+    }
+
+    element.addEventListener('wheel', onWheel, { passive: false })
+    return () => element.removeEventListener('wheel', onWheel)
+  }, [containerRef, zoomBy])
 
   return (
     <section
       ref={containerRef}
       role="region"
-      aria-label={`Board canvas, ${notes.length} notes. Use arrow keys to pan, Home to recenter.`}
-      aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home"
+      aria-label={`Board canvas, ${notes.length} notes. Arrow keys pan, Home recenters, + and - zoom, 0 resets zoom.`}
+      aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home + - 0"
       tabIndex={0}
       data-testid="note-board"
       data-total-notes={notes.length}
       data-visible-notes={visibleNotes.length}
+      data-scale={scale.toFixed(2)}
       className={cn(
         'bg-muted/30 relative h-full w-full touch-none overflow-hidden select-none',
         'focus-visible:ring-ring/60 focus-visible:ring-2 focus-visible:outline-none',
@@ -171,8 +222,10 @@ function SpatialBoard({
     >
       <div
         data-testid="note-board-canvas"
-        className="absolute inset-0 will-change-transform"
-        style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0)` }}
+        className="absolute inset-0 origin-top-left will-change-transform"
+        style={{
+          transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
+        }}
       >
         {visibleNotes.map((note) => (
           <NoteCard

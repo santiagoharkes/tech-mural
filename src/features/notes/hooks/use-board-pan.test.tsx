@@ -3,13 +3,14 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useBoardPan } from './use-board-pan'
 
 function Panel({ children }: { children?: React.ReactNode }) {
-  const { offset, bind, isPanning, panBy, reset } = useBoardPan()
+  const { offset, scale, bind, isPanning, panBy, reset, zoomBy, resetZoom } = useBoardPan()
   return (
     <div
       data-testid="panel"
       data-panning={isPanning ? 'true' : 'false'}
       data-offset={`${offset.x},${offset.y}`}
-      style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+      data-scale={scale.toFixed(2)}
+      style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}
       {...bind}
     >
       <button data-testid="pan-right" onClick={() => panBy(-20, 0)}>
@@ -20,6 +21,18 @@ function Panel({ children }: { children?: React.ReactNode }) {
       </button>
       <button data-testid="reset" onClick={reset}>
         reset
+      </button>
+      <button data-testid="zoom-in" onClick={() => zoomBy(2)}>
+        zoom in
+      </button>
+      <button data-testid="zoom-in-around-100" onClick={() => zoomBy(2, { x: 100, y: 100 })}>
+        zoom in @ (100,100)
+      </button>
+      <button data-testid="zoom-clamp" onClick={() => zoomBy(100)}>
+        zoom way in
+      </button>
+      <button data-testid="reset-zoom" onClick={resetZoom}>
+        reset zoom
       </button>
       {children}
     </div>
@@ -92,6 +105,47 @@ describe('useBoardPan', () => {
 
     fireEvent.click(screen.getByTestId('reset'))
     expect(panel.dataset.offset).toBe('0,0')
+  })
+
+  it('zoomBy without a centre multiplies the scale', () => {
+    render(<Panel />)
+    const panel = screen.getByTestId('panel')
+    expect(panel.dataset.scale).toBe('1.00')
+
+    fireEvent.click(screen.getByTestId('zoom-in'))
+    expect(panel.dataset.scale).toBe('2.00')
+  })
+
+  it('zoomBy around a cursor point keeps that point under the cursor', () => {
+    render(<Panel />)
+    const panel = screen.getByTestId('panel')
+
+    fireEvent.click(screen.getByTestId('zoom-in-around-100'))
+    // Before zoom: canvas point under (100,100) is (100,100) because
+    // offset is (0,0) and scale is 1.
+    // After zoom to scale=2, the same canvas point must land at screen (100,100):
+    //   canvasX * newScale + newOffsetX = 100  →  100*2 + newOffsetX = 100  →  newOffsetX = -100
+    expect(panel.dataset.offset).toBe('-100,-100')
+    expect(panel.dataset.scale).toBe('2.00')
+  })
+
+  it('clamps scale to the configured range', () => {
+    render(<Panel />)
+    const panel = screen.getByTestId('panel')
+    // factor of 100 × initial 1 = 100, clamped to MAX_SCALE (3)
+    fireEvent.click(screen.getByTestId('zoom-clamp'))
+    expect(panel.dataset.scale).toBe('3.00')
+  })
+
+  it('resetZoom returns scale to 1 while preserving the pan', () => {
+    render(<Panel />)
+    const panel = screen.getByTestId('panel')
+    fireEvent.click(screen.getByTestId('pan-right'))
+    fireEvent.click(screen.getByTestId('zoom-in'))
+    expect(panel.dataset.scale).toBe('2.00')
+    fireEvent.click(screen.getByTestId('reset-zoom'))
+    expect(panel.dataset.scale).toBe('1.00')
+    expect(panel.dataset.offset).toBe('-20,0')
   })
 
   it('preserves the previous offset across successive drags', () => {

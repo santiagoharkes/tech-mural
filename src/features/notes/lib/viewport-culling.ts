@@ -22,29 +22,34 @@ export interface PanOffset {
 
 /**
  * Is the given note's bounding box inside the viewport, taking the current
- * pan offset and a soft padding into account?
+ * pan offset, scale, and a soft padding into account?
  *
- * The spatial board lives in "canvas space"; pan translates the inner layer
- * by `(offset.x, offset.y)`. A note at canvas `(x, y)` is visually at
- * `(x + offset.x, y + offset.y)`. The viewport covers screen space
- * `[0, width] × [0, height]`, which maps back to canvas space
- * `[-offset.x, -offset.x + width] × [-offset.y, -offset.y + height]`.
+ * The spatial board lives in "canvas space"; the transform applied to the
+ * inner layer is `translate(offset) scale(scale)`. A point `(x_c, y_c)` in
+ * canvas space lands on screen at `(x_c * scale + offset.x, y_c * scale + offset.y)`.
+ * The viewport covers screen space `[0, width] × [0, height]`, which maps
+ * back to canvas space
+ * `[-offset.x / scale, (width - offset.x) / scale] × [-offset.y / scale, (height - offset.y) / scale]`.
+ * `padding` is expressed in screen pixels and converted to canvas space by
+ * dividing by `scale` — the further you zoom out, the more canvas the
+ * padding covers.
  */
 export function isNoteVisible(
   note: Pick<Note, 'x' | 'y'>,
   offset: PanOffset,
   viewport: Viewport,
+  scale: number = 1,
   padding: number = VIEWPORT_PADDING,
 ): boolean {
-  const left = -offset.x - padding
-  const right = -offset.x + viewport.width + padding
-  const top = -offset.y - padding
-  const bottom = -offset.y + viewport.height + padding
+  const leftCanvas = (-offset.x - padding) / scale
+  const rightCanvas = (viewport.width - offset.x + padding) / scale
+  const topCanvas = (-offset.y - padding) / scale
+  const bottomCanvas = (viewport.height - offset.y + padding) / scale
 
   return (
-    note.x + NOTE_CARD_WIDTH >= left &&
-    note.x <= right &&
-    note.y + NOTE_CARD_HEIGHT >= top &&
-    note.y <= bottom
+    note.x + NOTE_CARD_WIDTH >= leftCanvas &&
+    note.x <= rightCanvas &&
+    note.y + NOTE_CARD_HEIGHT >= topCanvas &&
+    note.y <= bottomCanvas
   )
 }

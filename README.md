@@ -58,6 +58,7 @@ A Husky pre-commit hook runs `lint-staged` (`eslint --fix` + `prettier --write` 
 - **"New" badge** on notes under 24 hours old, plus a subtle focus-ring. Window is configurable.
 - **List view toggle** — segmented control (board vs list) persisted in `localStorage` via Zustand. Every filter and sort still applies; filtered notes that were off-screen in the spatial view show up in the grid.
 - **Reveal on board** — every list item has a "Show on board" icon button. Clicking it writes `?focus=<id>` to the URL, flips the view to board, centres the canvas on the target, and flashes a highlight ring for ~2.5 s. Deep-linkable (`/?focus=note_0042` lands already-centred).
+- **Zoom** — mouse wheel zooms anchored to the cursor (no modifier needed on the canvas), keyboard shortcuts are `+` / `-` for step zoom and `0` to reset. Scale is clamped to `[0.3, 3]`.
 - **URL state** — filters and sort are synced to the query string via `nuqs`, with typed parsers that reject unknown values. Reload-safe, share-safe.
 - **State branches** — loading skeleton, empty board, error with retry, no-matches-for-filters with a clear action. Each is its own sub-component with its own `data-testid`.
 - **Keyboard-only path** — a skip-to-board link, a focusable region, and arrow-key pan mean the canvas works without a mouse.
@@ -167,16 +168,18 @@ Accessibility is treated as a first-class test concern — every query is role- 
 
 ## Stage plan (all complete)
 
-| Stage | Deliverable                                             | Status |
-| ----- | ------------------------------------------------------- | ------ |
-| 1     | Scaffold, tooling, design system, smoke tests           | ✅     |
-| 2     | Notes domain types, MSW mock, TanStack Query hook       | ✅     |
-| 3     | Spatial board view with note component                  | ✅     |
-| 4     | Author + colour filters, URL-synced state               | ✅     |
-| 5     | Sort options + recent-activity highlighting + list view | ✅     |
-| 6     | Performance pass (viewport culling, memoisation)        | ✅     |
-| 7     | Accessibility pass (`impeccable:audit` 14 → 15 / 20)    | ✅     |
-| 8     | Write-up + README polish                                | ✅     |
+| Stage | Deliverable                                                | Status |
+| ----- | ---------------------------------------------------------- | ------ |
+| 1     | Scaffold, tooling, design system, smoke tests              | ✅     |
+| 2     | Notes domain types, MSW mock, TanStack Query hook          | ✅     |
+| 3     | Spatial board view with note component                     | ✅     |
+| 4     | Author + colour filters, URL-synced state                  | ✅     |
+| 5     | Sort options + recent-activity highlighting + list view    | ✅     |
+| 6     | Performance pass (viewport culling, memoisation)           | ✅     |
+| 7     | Accessibility pass (`impeccable:audit` 14 → 15 / 20)       | ✅     |
+| 8     | Write-up + README polish                                   | ✅     |
+| 9     | List → board reveal (`?focus=note_id`, centre + highlight) | ✅     |
+| 10    | Wheel + keyboard zoom on the spatial canvas                | ✅     |
 
 Each stage is a single atomic commit (`git log --oneline`).
 

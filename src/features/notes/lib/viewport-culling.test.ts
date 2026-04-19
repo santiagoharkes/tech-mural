@@ -29,4 +29,16 @@ describe('isNoteVisible', () => {
     const wayPastEdge = { x: VIEWPORT.width + VIEWPORT_PADDING + NOTE_CARD_WIDTH + 10, y: 100 }
     expect(isNoteVisible(wayPastEdge, ORIGIN, VIEWPORT)).toBe(false)
   })
+
+  it('respects scale — zooming out reveals notes that were previously off-screen', () => {
+    const note = { x: 1500, y: 400 }
+    expect(isNoteVisible(note, ORIGIN, VIEWPORT, 1)).toBe(false)
+    expect(isNoteVisible(note, ORIGIN, VIEWPORT, 0.5)).toBe(true)
+  })
+
+  it('respects scale — zooming in hides notes that no longer fit', () => {
+    const note = { x: 900, y: 100 }
+    expect(isNoteVisible(note, ORIGIN, VIEWPORT, 1)).toBe(true)
+    expect(isNoteVisible(note, ORIGIN, VIEWPORT, 2)).toBe(false)
+  })
 })

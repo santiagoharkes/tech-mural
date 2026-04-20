@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useNotesQuery } from '@/features/notes/api/notes-query'
 import { useBoardFilters } from '@/features/filters/api/use-board-filters'
 import { applyNoteFilters } from '@/features/filters/lib/filter-notes'
@@ -62,11 +63,13 @@ function AppHeader() {
   const { data, isPending, isError } = useNotesQuery()
   const { filters, activeCount } = useBoardFilters()
 
+  const total = data?.notes.length ?? 0
+  const authors = data?.authors.length ?? 0
+  const filtered = data ? applyNoteFilters(data.notes, filters).length : 0
+
   const summary = (() => {
     if (isPending) return 'Loading…'
     if (isError || !data) return 'Offline'
-    const total = data.notes.length
-    const authors = data.authors.length
     if (activeCount === 0) {
       return (
         <>
@@ -75,7 +78,6 @@ function AppHeader() {
         </>
       )
     }
-    const filtered = applyNoteFilters(data.notes, filters).length
     return (
       <>
         Showing <strong className="text-foreground">{filtered}</strong> of{' '}
@@ -83,6 +85,16 @@ function AppHeader() {
         <strong className="text-foreground">{authors}</strong> contributors
       </>
     )
+  })()
+
+  // Plain-text version for the debounced live announcer. Avoids reading the
+  // "total / contributors" count every time the user toggles a filter —
+  // instead we wait for them to settle and announce just the filtered count.
+  const announcement = (() => {
+    if (isPending) return 'Loading board activity'
+    if (isError || !data) return 'Offline'
+    if (activeCount === 0) return `${total} notes, ${authors} contributors`
+    return `Showing ${filtered} of ${total} notes`
   })()
 
   return (
@@ -98,15 +110,35 @@ function AppHeader() {
       <div className="flex shrink-0 items-center gap-2">
         <p
           className="text-muted-foreground text-xs tabular-nums sm:text-sm"
-          role="status"
-          aria-live="polite"
           data-testid="board-summary"
         >
           {summary}
         </p>
         <ThemeToggle />
       </div>
+      <SummaryAnnouncer message={announcement} />
     </header>
+  )
+}
+
+/**
+ * Off-screen live region that announces the board summary. Debounced so rapid
+ * filter toggles queue a single announcement instead of one per click — the
+ * visible summary updates immediately for sighted users, while screen-reader
+ * users hear the final state after the user settles.
+ */
+function SummaryAnnouncer({ message }: { message: string }) {
+  const [announced, setAnnounced] = useState(message)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setAnnounced(message), 500)
+    return () => clearTimeout(timer)
+  }, [message])
+
+  return (
+    <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+      {announced}
+    </span>
   )
 }
 

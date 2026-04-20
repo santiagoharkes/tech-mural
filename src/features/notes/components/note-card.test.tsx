@@ -40,9 +40,10 @@ describe('<NoteCard />', () => {
   })
 
   it('renders a <time> element with a machine-readable dateTime', () => {
-    render(<NoteCard note={NOTE} authorName="Ada" now={NOW} />)
-    const time = screen.getByText(/2 hours ago/i)
-    expect(time.tagName).toBe('TIME')
+    const { container } = render(<NoteCard note={NOTE} authorName="Ada" now={NOW} />)
+    const time = container.querySelector('time')
+    expect(time).not.toBeNull()
+    expect(time).toHaveTextContent(/2 hours ago/i)
     expect(time).toHaveAttribute('dateTime', '2026-04-19T10:00:00Z')
   })
 

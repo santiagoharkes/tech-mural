@@ -190,13 +190,14 @@ Accessibility is treated as a first-class test concern — every query is role- 
 | 4     | Author + colour filters, URL-synced state                  | ✅     |
 | 5     | Sort options + recent-activity highlighting + list view    | ✅     |
 | 6     | Performance pass (viewport culling, memoisation)           | ✅     |
-| 7     | Accessibility pass (`impeccable:audit` 14 → 15 / 20)       | ✅     |
+| 7     | Accessibility pass (audit skill, keyboard pan, skip link)  | ✅     |
 | 8     | Write-up + README polish                                   | ✅     |
 | 9     | List → board reveal (`?focus=note_id`, centre + highlight) | ✅     |
 | 10    | Wheel + keyboard zoom on the spatial canvas                | ✅     |
 | 11    | Docs housekeeping (counts, structure, next steps)          | ✅     |
 | 12    | Mobile responsive (sheet sidebar, stacked toolbar)         | ✅     |
 | 13    | Dark mode (light / dark / system, persisted, full palette) | ✅     |
+| 14    | Accessibility polish (radiogroup nav, descriptions, hints) | ✅     |
 
 Each stage is a single atomic commit (`git log --oneline`).
 
